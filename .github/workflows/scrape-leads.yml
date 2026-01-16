@@ -1,0 +1,45 @@
+name: Scrape Solar Leads
+
+on:
+  # Run daily at 8am UTC (3am EST, midnight PST)
+  schedule:
+    - cron: '0 8 * * *'
+
+  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install requests
+
+      - name: Run scraper
+        run: python scraper.py
+
+      - name: Upload results to dashboard
+        env:
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          DASHBOARD_API_KEY: ${{ secrets.DASHBOARD_API_KEY }}
+        run: python upload_results.py
+
+      - name: Upload CSV as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: solar-leads-${{ github.run_number }}
+          path: output/*.csv
+          retention-days: 30
