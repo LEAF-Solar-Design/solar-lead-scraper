@@ -69,42 +69,102 @@ def guess_domain(company_name: str) -> str:
 
 
 def description_matches(description: str) -> bool:
-    """Check if job description matches our criteria."""
+    """Check if job description matches our criteria for solar design roles."""
     if not description or pd.isna(description):
         return False
 
     desc_lower = description.lower()
 
-    # Check for key terms
+    # Must have solar/PV context
     has_solar = 'solar' in desc_lower
     has_pv = 'pv' in desc_lower or 'photovoltaic' in desc_lower
-    has_autocad = 'autocad' in desc_lower or 'auto cad' in desc_lower
-    has_stringing_terms = any(term in desc_lower for term in [
-        'wiring schematic', 'wiring diagram', 'stringing', 'voltage drop',
-        'string design', 'electrical design', 'single line', 'one-line'
-    ])
 
-    # Require all three: (solar OR PV) AND AutoCAD AND stringing-related terms
-    # Option 1: solar + autocad + stringing
-    # Option 2: PV + autocad + stringing
-    return (has_solar or has_pv) and has_autocad and has_stringing_terms
+    if not (has_solar or has_pv):
+        return False
+
+    # Exclude tennis/racquet sports (stringing false positives)
+    tennis_terms = ['tennis', 'racquet', 'racket', 'pickleball', 'badminton']
+    if any(term in desc_lower for term in tennis_terms):
+        return False
+
+    # Exclude field/installation roles (we want designers, not installers)
+    installer_terms = [
+        'installer', 'installation technician', 'roof lead', 'rooftop',
+        'journeyman electrician', 'apprentice electrician', 'lineman', 'lineworker',
+        'o&m technician', 'field technician', 'service technician'
+    ]
+    if any(term in desc_lower for term in installer_terms):
+        return False
+
+    # Strong qualification signals - if present with solar/PV, auto-qualify
+    strong_signals = [
+        'stringing', 'string size', 'string sizing', 'voltage drop',
+        'conduit schedule', 'wiring schedule', 'single line', 'one-line',
+        'pv design', 'solar design', 'system design'
+    ]
+    if any(term in desc_lower for term in strong_signals):
+        return True
+
+    # Secondary qualification: design tools + solar context
+    design_tools = ['autocad', 'auto cad', 'cad', 'helioscope', 'aurora', 'pvsyst']
+    design_roles = ['designer', 'drafter', 'design engineer']
+
+    has_design_tool = any(term in desc_lower for term in design_tools)
+    has_design_role = any(term in desc_lower for term in design_roles)
+
+    return has_design_tool and has_design_role
 
 
 def scrape_solar_jobs() -> pd.DataFrame:
     """Scrape solar design/CAD jobs from multiple sources."""
 
-    # Broad search terms to cast a wide net - filter will narrow down
-    # Ordered by priority: stringing first, then role-based searches
+    # Massive search to cast a wide net - strong filters will narrow down
     search_terms = [
-        "stringing",
-        "PV designer",
-        "solar engineer",
-        "PV Electrical",
+        # Core solar design terms
         "solar designer",
+        "PV designer",
+        "solar design engineer",
+        "PV design engineer",
+        "solar CAD",
+        "PV CAD",
+        "photovoltaic designer",
+
+        # Engineering roles
+        "solar engineer",
+        "PV engineer",
+        "solar electrical engineer",
+        "renewable energy engineer",
+        "solar project engineer",
+
+        # Drafter/technician roles
+        "solar drafter",
+        "PV drafter",
+        "solar CAD technician",
+        "electrical drafter solar",
+
+        # Stringing/electrical design specific
+        "stringing solar",
+        "voltage drop solar",
+        "string sizing PV",
+        "solar electrical design",
+        "PV system design",
+
+        # Tools-based searches
+        "AutoCAD solar",
+        "helioscope",
+        "aurora solar",
+        "PVsyst",
+
+        # Broader catches
+        "solar energy designer",
+        "renewable designer",
+        "utility scale solar",
+        "commercial solar design",
+        "residential solar design",
     ]
 
     all_jobs = []
-    results_per_term = 200  # 200 x 5 terms = 1000 total max
+    results_per_term = 1000  # 1000 x 37 terms = 37,000 total max
 
     for term in search_terms:
         print(f"Searching for: {term}")
@@ -131,8 +191,13 @@ def scrape_solar_jobs() -> pd.DataFrame:
     df = pd.concat(all_jobs, ignore_index=True)
     print(f"\nTotal jobs found: {len(df)}")
 
-    # TODO: Add filtering after reviewing raw results
-    # Filter disabled for now to see what we're getting back
+    # Filter by description content
+    if 'description' in df.columns:
+        before_filter = len(df)
+        df = df[df['description'].apply(description_matches)]
+        print(f"After filtering: {len(df)} qualified leads (filtered out {before_filter - len(df)})")
+    else:
+        print("Warning: No description column available for filtering")
 
     return df
 
