@@ -30,6 +30,23 @@ def generate_linkedin_role_search_url(company_name: str, job_title: str) -> str:
     return f"https://www.google.com/search?q={encoded_query}"
 
 
+def generate_linkedin_hiring_search_url(company_name: str) -> str:
+    """Generate a Google search URL for recruiters and hiring managers at a company."""
+    clean_name = clean_company_name(company_name)
+    query = f'site:linkedin.com/in/ "{clean_name}" (recruiter OR "talent acquisition" OR "hiring manager" OR HR OR "human resources")'
+    encoded_query = urllib.parse.quote(query)
+    return f"https://www.google.com/search?q={encoded_query}"
+
+
+def generate_linkedin_enduser_search_url(company_name: str, job_title: str) -> str:
+    """Generate a Google search URL for end users - people in CAD/design roles at the company."""
+    clean_name = clean_company_name(company_name)
+    # Search for people who would actually use solar design software
+    query = f'site:linkedin.com/in/ "{clean_name}" (designer OR drafter OR "CAD technician" OR "design engineer" OR AutoCAD OR "solar design")'
+    encoded_query = urllib.parse.quote(query)
+    return f"https://www.google.com/search?q={encoded_query}"
+
+
 def clean_company_name(name: str) -> str:
     """Clean company name for domain guessing."""
     if not name:
@@ -156,10 +173,12 @@ def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
 
     # Generate Google search URLs for LinkedIn profiles
     df['linkedin_managers'] = df['company'].apply(generate_linkedin_search_url)
+    df['linkedin_hiring'] = df['company'].apply(generate_linkedin_hiring_search_url)
     df['linkedin_role'] = df.apply(lambda row: generate_linkedin_role_search_url(row['company'], row['job_title']), axis=1)
+    df['linkedin_endusers'] = df.apply(lambda row: generate_linkedin_enduser_search_url(row['company'], row['job_title']), axis=1)
 
     # Reorder columns
-    final_columns = ['company', 'domain', 'job_title', 'location', 'posting_url', 'linkedin_managers', 'linkedin_role', 'date_scraped']
+    final_columns = ['company', 'domain', 'job_title', 'location', 'posting_url', 'linkedin_managers', 'linkedin_hiring', 'linkedin_role', 'linkedin_endusers', 'date_scraped']
     df = df[[c for c in final_columns if c in df.columns]]
 
     return df

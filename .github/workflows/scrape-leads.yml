@@ -1,9 +1,9 @@
 name: Scrape Solar Leads
 
 on:
-  # Run daily at 8am UTC (3am EST, midnight PST)
+  # Run daily at 4am CT (10:00 UTC)
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 10 * * *'
 
   # Allow manual trigger from GitHub Actions tab
   workflow_dispatch:
