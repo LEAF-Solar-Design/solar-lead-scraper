@@ -69,40 +69,42 @@ def guess_domain(company_name: str) -> str:
 
 
 def description_matches(description: str) -> bool:
-    """Check if job description contains solar/PV AND AutoCAD AND stringing-related terms."""
+    """Check if job description matches our criteria."""
     if not description or pd.isna(description):
         return False
 
     desc_lower = description.lower()
 
-    # Must contain solar or PV related terms
-    has_solar = any(term in desc_lower for term in [
-        'solar', 'pv', 'photovoltaic'
-    ])
-
-    # Must contain AutoCAD
+    # Auto-include: stringing + solar OR stringing + autocad
+    has_stringing = 'stringing' in desc_lower
+    has_solar = any(term in desc_lower for term in ['solar', 'pv', 'photovoltaic'])
     has_autocad = 'autocad' in desc_lower or 'auto cad' in desc_lower
 
-    # Must contain stringing/wiring related terms
-    has_stringing = any(term in desc_lower for term in [
+    if has_stringing and (has_solar or has_autocad):
+        return True
+
+    # Otherwise, require all three: solar/PV AND AutoCAD AND stringing-related terms
+    has_stringing_terms = any(term in desc_lower for term in [
         'wiring schematic', 'wiring diagram', 'stringing', 'voltage drop',
         'string design', 'electrical design', 'single line', 'one-line'
     ])
 
-    return has_solar and has_autocad and has_stringing
+    return has_solar and has_autocad and has_stringing_terms
 
 
 def scrape_solar_jobs() -> pd.DataFrame:
     """Scrape solar design/CAD jobs from multiple sources."""
 
-    # Broader search terms since we're filtering by description
+    # AND search terms - each term uses quotes or AND for exact matching
     search_terms = [
-        "solar AutoCAD",
-        "PV AutoCAD",
-        "solar designer",
-        "solar CAD",
-        "PV designer",
-        "photovoltaic designer",
+        '"solar" AND "AutoCAD"',
+        '"PV" AND "AutoCAD"',
+        '"solar" AND "designer"',
+        '"solar" AND "CAD"',
+        '"PV" AND "designer"',
+        '"photovoltaic" AND "designer"',
+        '"stringing" AND "solar"',
+        '"stringing" AND "AutoCAD"',
     ]
 
     all_jobs = []
