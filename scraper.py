@@ -93,19 +93,18 @@ def description_matches(description: str) -> bool:
 def scrape_solar_jobs() -> pd.DataFrame:
     """Scrape solar design/CAD jobs from multiple sources."""
 
-    # AND search terms - each term uses quotes or AND for exact matching
+    # Broad search terms to cast a wide net - filter will narrow down
+    # Ordered by priority: stringing first, then role-based searches
     search_terms = [
-        '"solar" AND "AutoCAD"',
-        '"PV" AND "AutoCAD"',
-        '"solar" AND "designer"',
-        '"solar" AND "CAD"',
-        '"PV" AND "designer"',
-        '"photovoltaic" AND "designer"',
-        '"stringing" AND "solar"',
-        '"stringing" AND "AutoCAD"',
+        "stringing",
+        "PV designer",
+        "solar engineer",
+        "PV Electrical",
+        "solar designer",
     ]
 
     all_jobs = []
+    results_per_term = 200  # 200 x 5 terms = 1000 total max
 
     for term in search_terms:
         print(f"Searching for: {term}")
@@ -114,7 +113,7 @@ def scrape_solar_jobs() -> pd.DataFrame:
                 site_name=["indeed", "zip_recruiter", "glassdoor"],
                 search_term=term,
                 location="USA",
-                results_wanted=100,  # Get more since we'll filter down
+                results_wanted=results_per_term,
                 country_indeed="USA",
             )
             if not jobs.empty:
@@ -132,13 +131,8 @@ def scrape_solar_jobs() -> pd.DataFrame:
     df = pd.concat(all_jobs, ignore_index=True)
     print(f"\nTotal jobs found: {len(df)}")
 
-    # Filter by description content - must have solar/PV AND AutoCAD
-    if 'description' in df.columns:
-        before_filter = len(df)
-        df = df[df['description'].apply(description_matches)]
-        print(f"After filtering for solar/PV + AutoCAD in description: {len(df)} jobs (filtered out {before_filter - len(df)})")
-    else:
-        print("Warning: No description column available for filtering")
+    # TODO: Add filtering after reviewing raw results
+    # Filter disabled for now to see what we're getting back
 
     return df
 
