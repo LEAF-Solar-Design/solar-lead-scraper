@@ -175,10 +175,10 @@ def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
     df['linkedin_managers'] = df['company'].apply(generate_linkedin_search_url)
     df['linkedin_hiring'] = df['company'].apply(generate_linkedin_hiring_search_url)
     df['linkedin_role'] = df.apply(lambda row: generate_linkedin_role_search_url(row['company'], row['job_title']), axis=1)
-    df['linkedin_endusers'] = df.apply(lambda row: generate_linkedin_enduser_search_url(row['company'], row['job_title']), axis=1)
+    df['google_enduser'] = df.apply(lambda row: generate_linkedin_enduser_search_url(row['company'], row['job_title']), axis=1)
 
     # Reorder columns
-    final_columns = ['company', 'domain', 'job_title', 'location', 'posting_url', 'linkedin_managers', 'linkedin_hiring', 'linkedin_role', 'linkedin_endusers', 'date_scraped']
+    final_columns = ['company', 'domain', 'job_title', 'location', 'posting_url', 'linkedin_managers', 'linkedin_hiring', 'linkedin_role', 'google_enduser', 'date_scraped']
     df = df[[c for c in final_columns if c in df.columns]]
 
     return df
