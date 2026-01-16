@@ -75,21 +75,19 @@ def description_matches(description: str) -> bool:
 
     desc_lower = description.lower()
 
-    # Auto-include: stringing + solar OR stringing + autocad
-    has_stringing = 'stringing' in desc_lower
-    has_solar = any(term in desc_lower for term in ['solar', 'pv', 'photovoltaic'])
+    # Check for key terms
+    has_solar = 'solar' in desc_lower
+    has_pv = 'pv' in desc_lower or 'photovoltaic' in desc_lower
     has_autocad = 'autocad' in desc_lower or 'auto cad' in desc_lower
-
-    if has_stringing and (has_solar or has_autocad):
-        return True
-
-    # Otherwise, require all three: solar/PV AND AutoCAD AND stringing-related terms
     has_stringing_terms = any(term in desc_lower for term in [
         'wiring schematic', 'wiring diagram', 'stringing', 'voltage drop',
         'string design', 'electrical design', 'single line', 'one-line'
     ])
 
-    return has_solar and has_autocad and has_stringing_terms
+    # Require all three: (solar OR PV) AND AutoCAD AND stringing-related terms
+    # Option 1: solar + autocad + stringing
+    # Option 2: PV + autocad + stringing
+    return (has_solar or has_pv) and has_autocad and has_stringing_terms
 
 
 def scrape_solar_jobs() -> pd.DataFrame:
