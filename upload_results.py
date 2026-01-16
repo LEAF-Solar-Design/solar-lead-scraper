@@ -9,11 +9,12 @@ import requests
 
 
 def get_latest_csv():
-    """Find the most recent CSV file in output directory."""
+    """Find the most recent CSV file in output directory by filename date."""
     csv_files = glob.glob("output/solar_leads_*.csv")
     if not csv_files:
         raise FileNotFoundError("No CSV files found in output/")
-    return max(csv_files, key=os.path.getctime)
+    # Sort by filename (which contains timestamp) to get the latest
+    return max(csv_files)
 
 
 def upload_to_dashboard(csv_path: str):
