@@ -176,8 +176,7 @@ def description_matches(description: str) -> bool:
     if has_strong_signal and has_design_role:
         return True
 
-    # TIER 3: General CAD tools + explicit solar design job
-    # Requires: CAD tool + design role + solar project type
+    # TIER 3: General CAD tools + design role + solar project type
     general_cad_tools = ['autocad', 'auto cad', 'revit', 'sketchup', 'bluebeam', 'solidworks']
     solar_project_types = [
         'solar array', 'pv array', 'solar installation', 'pv installation',
@@ -193,7 +192,6 @@ def description_matches(description: str) -> bool:
         return True
 
     # TIER 4: Job title contains explicit solar design role
-    # Check if job title (usually at start of description) mentions solar + design role
     title_signals = [
         'solar designer', 'pv designer', 'solar drafter', 'pv drafter',
         'solar design engineer', 'pv design engineer', 'solar cad',
@@ -202,6 +200,22 @@ def description_matches(description: str) -> bool:
     # Check first 200 chars (usually contains title)
     title_area = desc_lower[:200]
     if any(sig in title_area for sig in title_signals):
+        return True
+
+    # TIER 5: Design role + CAD tool + solar/PV mentioned (simpler 2-way with solar context)
+    # This catches generic CAD jobs at solar companies
+    if has_cad_tool and has_design_role:
+        # Already passed the solar/PV check at the top, so this is a CAD design job with solar context
+        return True
+
+    # TIER 6: Design role titles that explicitly include solar/PV/renewable
+    solar_design_titles = [
+        'electrical designer', 'electrical drafter', 'cad designer', 'cad drafter',
+        'cad technician', 'cad operator', 'design technician', 'drafting technician',
+        'bim modeler', 'bim technician', 'design assistant', 'permit designer'
+    ]
+    # If the job has one of these titles AND passed the solar/PV context check, qualify it
+    if any(title in desc_lower for title in solar_design_titles):
         return True
 
     return False
