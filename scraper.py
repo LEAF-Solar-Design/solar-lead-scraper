@@ -213,17 +213,36 @@ def scrape_solar_jobs() -> pd.DataFrame:
     # Wide net search - generic role names that our filter will narrow down
     # The filter is strict, so we can afford to search broadly here
     search_terms = [
-        # Generic designer/drafter roles (will catch solar context in filter)
+        # Core drafter/designer roles
         "electrical designer",
         "electrical drafter",
         "CAD designer",
         "CAD drafter",
         "CAD technician",
+        "CAD operator",
         "AutoCAD drafter",
         "AutoCAD designer",
+        "AutoCAD operator",
+
+        # Technician/assistant variants
         "design technician",
         "drafting technician",
-        "electrical CAD",
+        "engineering technician electrical",
+        "design assistant",
+        "drafting assistant",
+
+        # Coordinator/specialist roles
+        "design coordinator",
+        "CAD coordinator",
+        "electrical detailer",
+
+        # BIM roles (often overlap with solar design)
+        "BIM modeler",
+        "BIM technician",
+
+        # Permit/plans specific
+        "permit designer",
+        "plans designer",
 
         # Solar-specific searches
         "solar designer",
@@ -231,7 +250,10 @@ def scrape_solar_jobs() -> pd.DataFrame:
         "solar design engineer",
         "PV designer",
         "PV design engineer",
+        "PV system designer",
         "photovoltaic designer",
+        "solar permit designer",
+        "solar plans designer",
 
         # Tool-based searches (very targeted)
         "helioscope",
