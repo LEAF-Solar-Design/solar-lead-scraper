@@ -87,84 +87,171 @@ def description_matches(description: str) -> bool:
     if any(term in desc_lower for term in tennis_terms):
         return False
 
+    # Exclude space/aerospace/satellite context (solar panels on spacecraft)
+    space_terms = [
+        'spacecraft', 'satellite', 'space system', 'aerospace', 'starlink',
+        'orbit', 'launch vehicle', 'avionics', 'space exploration'
+    ]
+    if any(term in desc_lower for term in space_terms):
+        return False
+
+    # Exclude semiconductor/chip design (different kind of CAD)
+    semiconductor_terms = [
+        'semiconductor', 'rtl', 'asic', 'fpga', 'vlsi', 'chip design',
+        'physical verification', 'synthesis', 'place and route', 'foundry',
+        'wafer', 'silicon', 'integrated circuit', 'ic design'
+    ]
+    if any(term in desc_lower for term in semiconductor_terms):
+        return False
+
     # Exclude field/installation roles (we want designers, not installers)
     installer_terms = [
         'installer', 'installation technician', 'roof lead', 'rooftop',
         'journeyman electrician', 'apprentice electrician', 'lineman', 'lineworker',
-        'o&m technician', 'field technician', 'service technician'
+        'o&m technician', 'field technician', 'service technician',
+        'field service', 'commissioning technician', 'maintenance technician',
+        'solar technician', 'pv technician', 'array supervisor'
     ]
     if any(term in desc_lower for term in installer_terms):
         return False
 
-    # Strong qualification signals - if present with solar/PV, auto-qualify
-    strong_signals = [
-        'stringing', 'string size', 'string sizing', 'voltage drop',
-        'conduit schedule', 'wiring schedule', 'single line', 'one-line',
-        'pv design', 'solar design', 'system design'
+    # Exclude sales/marketing roles
+    sales_terms = [
+        'sales director', 'sales manager', 'marketing director', 'marketing manager',
+        'account executive', 'business development', 'sales representative',
+        'sales team', 'sales & marketing', 'sales and marketing',
+        'sales consultant', 'sales engineer', 'sales specialist',
+        'account manager', 'territory manager'
     ]
-    if any(term in desc_lower for term in strong_signals):
+    if any(term in desc_lower for term in sales_terms):
+        return False
+
+    # Exclude management/non-design roles
+    mgmt_terms = [
+        'project manager', 'construction manager', 'operations manager',
+        'program manager', 'development manager', 'site manager',
+        'general manager', 'director of operations', 'vp ', 'vice president',
+        'chief ', 'ceo', 'cto', 'cfo'
+    ]
+    if any(term in desc_lower for term in mgmt_terms):
+        return False
+
+    # Exclude non-design engineering roles
+    other_eng_terms = [
+        'application engineer', 'applications engineer', 'technical sales', 'technical support',
+        'field engineer', 'commissioning engineer', 'product engineer',
+        'project engineer', 'construction engineer', 'site engineer',
+        'structural engineer', 'civil engineer', 'mechanical engineer',
+        'manufacturing engineer', 'process engineer', 'quality engineer',
+        'systems engineer', 'transmission engineer', 'substation engineer',
+        'protection and control', 'p&c engineer', 'relay engineer',
+        'estimator', 'preconstruction'
+    ]
+    if any(term in desc_lower for term in other_eng_terms):
+        return False
+
+    # TIER 1: Solar-specific design software (auto-qualify - these are ONLY used for solar design)
+    solar_specific_tools = ['helioscope', 'aurora solar', 'pvsyst', 'solaredge designer', 'opensolaris']
+    if any(tool in desc_lower for tool in solar_specific_tools):
         return True
 
-    # Secondary qualification: design tools + solar context
-    design_tools = ['autocad', 'auto cad', 'cad', 'helioscope', 'aurora', 'pvsyst']
-    design_roles = ['designer', 'drafter', 'design engineer']
+    # TIER 2: Strong technical signals that are specific to solar CAD work
+    # These must appear with a design role context
+    strong_technical_signals = [
+        'string sizing', 'stringing diagram', 'stringing layout',
+        'module layout', 'array layout', 'panel layout',
+        'single line diagram', 'one-line diagram', 'sld ',
+        'conduit schedule', 'wiring schedule', 'wire schedule',
+        'permit set', 'plan set', 'permit package', 'construction drawing',
+        'voltage drop calculation', 'voltage drop calc'
+    ]
+    design_role_indicators = [
+        'designer', 'drafter', 'draftsman', 'drafting', 'cad ',
+        'design engineer', 'design technician', 'cad technician'
+    ]
 
-    has_design_tool = any(term in desc_lower for term in design_tools)
-    has_design_role = any(term in desc_lower for term in design_roles)
+    has_strong_signal = any(sig in desc_lower for sig in strong_technical_signals)
+    has_design_role = any(role in desc_lower for role in design_role_indicators)
 
-    return has_design_tool and has_design_role
+    if has_strong_signal and has_design_role:
+        return True
+
+    # TIER 3: General CAD tools + explicit solar design job
+    # Requires: CAD tool + design role + solar project type
+    general_cad_tools = ['autocad', 'auto cad', 'revit', 'sketchup', 'bluebeam', 'solidworks']
+    solar_project_types = [
+        'solar array', 'pv array', 'solar installation', 'pv installation',
+        'solar project', 'pv project', 'solar system', 'pv system',
+        'residential solar', 'commercial solar', 'utility solar', 'utility-scale solar',
+        'rooftop solar', 'ground mount solar', 'carport solar'
+    ]
+
+    has_cad_tool = any(tool in desc_lower for tool in general_cad_tools)
+    has_solar_project = any(proj in desc_lower for proj in solar_project_types)
+
+    if has_cad_tool and has_design_role and has_solar_project:
+        return True
+
+    # TIER 4: Job title contains explicit solar design role
+    # Check if job title (usually at start of description) mentions solar + design role
+    title_signals = [
+        'solar designer', 'pv designer', 'solar drafter', 'pv drafter',
+        'solar design engineer', 'pv design engineer', 'solar cad',
+        'photovoltaic designer', 'solar design technician'
+    ]
+    # Check first 200 chars (usually contains title)
+    title_area = desc_lower[:200]
+    if any(sig in title_area for sig in title_signals):
+        return True
+
+    return False
 
 
 def scrape_solar_jobs() -> pd.DataFrame:
     """Scrape solar design/CAD jobs from multiple sources."""
 
-    # Massive search to cast a wide net - strong filters will narrow down
+    # Wide net search - generic role names that our filter will narrow down
+    # The filter is strict, so we can afford to search broadly here
     search_terms = [
-        # Core solar design terms
+        # Generic designer/drafter roles (will catch solar context in filter)
+        "electrical designer",
+        "electrical drafter",
+        "CAD designer",
+        "CAD drafter",
+        "CAD technician",
+        "AutoCAD drafter",
+        "AutoCAD designer",
+        "design technician",
+        "drafting technician",
+        "electrical CAD",
+
+        # Solar-specific searches
         "solar designer",
-        "PV designer",
+        "solar drafter",
         "solar design engineer",
+        "PV designer",
         "PV design engineer",
-        "solar CAD",
-        "PV CAD",
         "photovoltaic designer",
 
-        # Engineering roles
-        "solar engineer",
-        "PV engineer",
-        "solar electrical engineer",
-        "renewable energy engineer",
-        "solar project engineer",
-
-        # Drafter/technician roles
-        "solar drafter",
-        "PV drafter",
-        "solar CAD technician",
-        "electrical drafter solar",
-
-        # Stringing/electrical design specific
-        "stringing solar",
-        "voltage drop solar",
-        "string sizing PV",
-        "solar electrical design",
-        "PV system design",
-
-        # Tools-based searches
-        "AutoCAD solar",
+        # Tool-based searches (very targeted)
         "helioscope",
         "aurora solar",
         "PVsyst",
 
-        # Broader catches
-        "solar energy designer",
-        "renewable designer",
+        # Strong signal searches
+        "stringing solar",
+        "permit set solar",
+        "plan set solar",
+
+        # Context-based searches
+        "residential solar",
+        "commercial solar",
         "utility scale solar",
-        "commercial solar design",
-        "residential solar design",
+        "rooftop solar",
     ]
 
     all_jobs = []
-    results_per_term = 1000  # 1000 x 37 terms = 37,000 total max
+    results_per_term = 1000  # Wide net, filter does the work
 
     for term in search_terms:
         print(f"Searching for: {term}")
