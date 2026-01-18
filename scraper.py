@@ -3,6 +3,7 @@ Solar Job Lead Scraper
 Finds companies hiring for solar CAD/design roles to use as sales leads.
 """
 
+import json
 import re
 import urllib.parse
 from datetime import datetime
@@ -15,6 +16,8 @@ from jobspy import scrape_jobs
 # Company blocklist - known false positive industries
 # Aerospace/defense companies use "solar" for spacecraft solar panels
 # Semiconductor companies use "CAD" for chip design tools
+# NOTE: These are now loaded from config/filter-config.json at runtime
+# This constant is kept for documentation purposes
 COMPANY_BLOCKLIST = {
     # Aerospace/Defense
     'boeing', 'northrop grumman', 'lockheed', 'lockheed martin',
@@ -26,6 +29,35 @@ COMPANY_BLOCKLIST = {
     'texas instruments', 'micron', 'applied materials',
     'lam research', 'kla', 'asml', 'marvell', 'microchip',
 }
+
+
+def load_filter_config(config_path: Path = None) -> dict:
+    """Load filter configuration from JSON file.
+
+    Args:
+        config_path: Path to config file. Defaults to config/filter-config.json
+                     relative to this file's location.
+
+    Returns:
+        Configuration dictionary with signals, weights, and threshold.
+    """
+    if config_path is None:
+        config_path = Path(__file__).parent / "config" / "filter-config.json"
+
+    with open(config_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+# Load config at module level (lazy loading on first use)
+_CONFIG = None
+
+
+def get_config() -> dict:
+    """Get filter configuration, loading from file if needed."""
+    global _CONFIG
+    if _CONFIG is None:
+        _CONFIG = load_filter_config()
+    return _CONFIG
 
 
 def generate_linkedin_search_url(company_name: str, job_title: str = None) -> str:
@@ -85,11 +117,17 @@ def guess_domain(company_name: str) -> str:
 
 
 def description_matches(description: str, company_name: str = None) -> bool:
-    """Check if job description matches our criteria for solar design roles."""
+    """Check if job description matches our criteria for solar design roles.
+
+    All filter terms are loaded from config/filter-config.json.
+    """
+    config = get_config()
+
     # Company blocklist check FIRST (before any description analysis)
     if company_name:
         company_lower = company_name.lower()
-        for blocked in COMPANY_BLOCKLIST:
+        company_blocklist = config.get("company_blocklist", [])
+        for blocked in company_blocklist:
             if blocked in company_lower:
                 return False
 
@@ -99,169 +137,69 @@ def description_matches(description: str, company_name: str = None) -> bool:
     desc_lower = description.lower()
 
     # Must have solar/PV context
-    has_solar = 'solar' in desc_lower
-    has_pv = 'pv' in desc_lower or 'photovoltaic' in desc_lower
+    required_context = config.get("required_context", {}).get("patterns", ["solar", "pv", "photovoltaic"])
+    has_solar_context = any(ctx in desc_lower for ctx in required_context)
 
-    if not (has_solar or has_pv):
+    if not has_solar_context:
         return False
 
-    # Exclude tennis/racquet sports (stringing false positives)
-    tennis_terms = ['tennis', 'racquet', 'racket', 'pickleball', 'badminton']
-    if any(term in desc_lower for term in tennis_terms):
-        return False
+    # Check all exclusion categories
+    exclusions = config.get("exclusions", {})
+    for category, excl_config in exclusions.items():
+        patterns = excl_config.get("patterns", [])
+        if any(pattern in desc_lower for pattern in patterns):
+            return False
 
-    # Exclude space/aerospace/satellite context (solar panels on spacecraft)
-    space_terms = [
-        'spacecraft', 'satellite', 'space system', 'aerospace', 'starlink',
-        'orbit', 'launch vehicle', 'avionics', 'space exploration'
-    ]
-    if any(term in desc_lower for term in space_terms):
-        return False
+    # Get positive signals config
+    positive_signals = config.get("positive_signals", {})
+    design_role_indicators = config.get("design_role_indicators", [])
 
-    # Exclude semiconductor/chip design (different kind of CAD)
-    semiconductor_terms = [
-        'semiconductor', 'rtl', 'asic', 'fpga', 'vlsi', 'chip design',
-        'physical verification', 'synthesis', 'place and route', 'foundry',
-        'wafer', 'silicon', 'integrated circuit', 'ic design'
-    ]
-    if any(term in desc_lower for term in semiconductor_terms):
-        return False
-
-    # Exclude EDA/chip design tools (semiconductor CAD, not solar CAD)
-    # Added in Phase 2 - these are chip design tools, not solar design tools
-    eda_tools = [
-        'cadence', 'synopsys', 'mentor graphics', 'siemens eda',
-        'virtuoso', 'spectre', 'innovus', 'genus', 'conformal',
-        'calibre', 'questa', 'modelsim', 'vcs', 'verdi',
-        'primetime', 'icc2', 'design compiler', 'dc shell',
-        'spyglass', 'formality', 'encounter', 'ic compiler'
-    ]
-    if any(tool in desc_lower for tool in eda_tools):
-        return False
-
-    # Exclude field/installation roles (we want designers, not installers)
-    installer_terms = [
-        'installer', 'installation technician', 'roof lead', 'rooftop',
-        'journeyman electrician', 'apprentice electrician', 'lineman', 'lineworker',
-        'o&m technician', 'field technician', 'service technician',
-        'field service', 'commissioning technician', 'maintenance technician',
-        'solar technician', 'pv technician', 'array supervisor',
-        # Added in Phase 2 - installer false positives
-        'stringer',           # Tennis/racquet AND solar stringing labor
-        'roofer',             # Roofing labor, not design
-        'foreman',            # Construction supervision
-        'crew lead',          # Installation crew supervision
-        'panel installer',    # Explicit installer role
-    ]
-    if any(term in desc_lower for term in installer_terms):
-        return False
-
-    # Exclude sales/marketing roles
-    sales_terms = [
-        'sales director', 'sales manager', 'marketing director', 'marketing manager',
-        'account executive', 'business development', 'sales representative',
-        'sales team', 'sales & marketing', 'sales and marketing',
-        'sales consultant', 'sales engineer', 'sales specialist',
-        'account manager', 'territory manager'
-    ]
-    if any(term in desc_lower for term in sales_terms):
-        return False
-
-    # Exclude management/non-design roles
-    mgmt_terms = [
-        'project manager', 'construction manager', 'operations manager',
-        'program manager', 'development manager', 'site manager',
-        'general manager', 'director of operations', 'vp ', 'vice president',
-        'chief ', 'ceo', 'cto', 'cfo'
-    ]
-    if any(term in desc_lower for term in mgmt_terms):
-        return False
-
-    # Exclude non-design engineering roles
-    other_eng_terms = [
-        'application engineer', 'applications engineer', 'technical sales', 'technical support',
-        'field engineer', 'commissioning engineer', 'product engineer',
-        'project engineer', 'construction engineer', 'site engineer',
-        'structural engineer', 'civil engineer', 'mechanical engineer',
-        'manufacturing engineer', 'process engineer', 'quality engineer',
-        'systems engineer', 'transmission engineer', 'substation engineer',
-        'protection and control', 'p&c engineer', 'relay engineer',
-        'estimator', 'preconstruction',
-        # Added in Phase 2 - utility/grid engineering false positives
-        'interconnection engineer',  # Utility interface role
-        'grid engineer',             # Grid/utility focus
-        'protection engineer',       # Utility protection systems
-        'metering engineer',         # Utility metering
-    ]
-    if any(term in desc_lower for term in other_eng_terms):
-        return False
-
-    # TIER 1: Solar-specific design software (auto-qualify - these are ONLY used for solar design)
-    solar_specific_tools = ['helioscope', 'aurora solar', 'pvsyst', 'solaredge designer', 'opensolaris']
-    if any(tool in desc_lower for tool in solar_specific_tools):
+    # TIER 1: Solar-specific design software (auto-qualify)
+    tier1 = positive_signals.get("tier1_tools", {})
+    tier1_patterns = tier1.get("patterns", [])
+    if any(tool in desc_lower for tool in tier1_patterns):
         return True
 
     # TIER 2: Strong technical signals that are specific to solar CAD work
-    # These must appear with a design role context
-    strong_technical_signals = [
-        'string sizing', 'stringing diagram', 'stringing layout',
-        'module layout', 'array layout', 'panel layout',
-        'single line diagram', 'one-line diagram', 'sld ',
-        'conduit schedule', 'wiring schedule', 'wire schedule',
-        'permit set', 'plan set', 'permit package', 'construction drawing',
-        'voltage drop calculation', 'voltage drop calc'
-    ]
-    design_role_indicators = [
-        'designer', 'drafter', 'draftsman', 'drafting', 'cad ',
-        'design engineer', 'design technician', 'cad technician'
-    ]
-
-    has_strong_signal = any(sig in desc_lower for sig in strong_technical_signals)
+    tier2 = positive_signals.get("tier2_strong", {})
+    tier2_patterns = tier2.get("patterns", [])
+    has_strong_signal = any(sig in desc_lower for sig in tier2_patterns)
     has_design_role = any(role in desc_lower for role in design_role_indicators)
 
     if has_strong_signal and has_design_role:
         return True
 
     # TIER 3: General CAD tools + design role + solar project type
-    general_cad_tools = ['autocad', 'auto cad', 'revit', 'sketchup', 'bluebeam', 'solidworks']
-    solar_project_types = [
-        'solar array', 'pv array', 'solar installation', 'pv installation',
-        'solar project', 'pv project', 'solar system', 'pv system',
-        'residential solar', 'commercial solar', 'utility solar', 'utility-scale solar',
-        'rooftop solar', 'ground mount solar', 'carport solar'
-    ]
-
-    has_cad_tool = any(tool in desc_lower for tool in general_cad_tools)
-    has_solar_project = any(proj in desc_lower for proj in solar_project_types)
+    tier3 = positive_signals.get("tier3_cad_project", {})
+    tier3_cad = tier3.get("patterns_cad", [])
+    tier3_project = tier3.get("patterns_project", [])
+    has_cad_tool = any(tool in desc_lower for tool in tier3_cad)
+    has_solar_project = any(proj in desc_lower for proj in tier3_project)
 
     if has_cad_tool and has_design_role and has_solar_project:
         return True
 
     # TIER 4: Job title contains explicit solar design role
-    title_signals = [
-        'solar designer', 'pv designer', 'solar drafter', 'pv drafter',
-        'solar design engineer', 'pv design engineer', 'solar cad',
-        'photovoltaic designer', 'solar design technician'
-    ]
+    tier4 = positive_signals.get("tier4_title", {})
+    tier4_patterns = tier4.get("patterns", [])
     # Check first 200 chars (usually contains title)
     title_area = desc_lower[:200]
-    if any(sig in title_area for sig in title_signals):
+    if any(sig in title_area for sig in tier4_patterns):
         return True
 
-    # TIER 5: Design role + CAD tool + solar/PV mentioned (simpler 2-way with solar context)
-    # This catches generic CAD jobs at solar companies
-    if has_cad_tool and has_design_role:
-        # Already passed the solar/PV check at the top, so this is a CAD design job with solar context
+    # TIER 5: Design role + CAD tool + solar/PV mentioned
+    tier5 = positive_signals.get("tier5_cad_design", {})
+    tier5_cad = tier5.get("patterns_cad", [])
+    has_cad_tool_tier5 = any(tool in desc_lower for tool in tier5_cad)
+
+    if has_cad_tool_tier5 and has_design_role:
+        # Already passed the solar/PV check at the top
         return True
 
-    # TIER 6: Design role titles that explicitly include solar/PV/renewable
-    solar_design_titles = [
-        'electrical designer', 'electrical drafter', 'cad designer', 'cad drafter',
-        'cad technician', 'cad operator', 'design technician', 'drafting technician',
-        'bim modeler', 'bim technician', 'design assistant', 'permit designer'
-    ]
-    # If the job has one of these titles AND passed the solar/PV context check, qualify it
-    if any(title in desc_lower for title in solar_design_titles):
+    # TIER 6: Design role titles with solar context
+    tier6 = positive_signals.get("tier6_design_titles", {})
+    tier6_patterns = tier6.get("patterns", [])
+    if any(title in desc_lower for title in tier6_patterns):
         return True
 
     return False
