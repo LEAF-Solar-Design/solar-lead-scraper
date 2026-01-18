@@ -134,7 +134,8 @@ def score_company(company_name: str, config: dict) -> tuple[float, list[str]]:
         Tuple of (score, reasons_list)
         Score is -100 if blocklisted, 0 otherwise (future: positive signals for known solar companies)
     """
-    if not company_name:
+    # Handle None, NaN, or non-string company names
+    if not company_name or not isinstance(company_name, str):
         return (0.0, [])
 
     company_lower = company_name.lower()
