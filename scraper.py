@@ -498,11 +498,15 @@ def extract_tier_from_reasons(reasons: list[str]) -> str:
     return "unknown"
 
 
-def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats]:
+def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
     """Scrape solar design/CAD jobs from multiple sources.
 
     Returns:
-        Tuple of (DataFrame of qualified jobs, FilterStats with run statistics)
+        Tuple of:
+        - DataFrame of qualified jobs
+        - FilterStats with run statistics
+        - list of rejected lead dicts for labeling export
+        - dict mapping row indices to ScoringResult for confidence calculation
     """
 
     # Wide net search - generic role names that our filter will narrow down
@@ -589,7 +593,7 @@ def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats]:
 
     if not all_jobs:
         print("No jobs found!")
-        return pd.DataFrame(), FilterStats()
+        return pd.DataFrame(), FilterStats(), [], {}
 
     # Combine all results
     df = pd.concat(all_jobs, ignore_index=True)
@@ -597,6 +601,8 @@ def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats]:
 
     # Collect filter statistics
     stats = FilterStats()
+    rejected_leads = []
+    scoring_results = {}  # Map row index to ScoringResult for confidence calculation
 
     # Filter by description content
     if 'description' in df.columns:
@@ -610,18 +616,30 @@ def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats]:
                 tier = extract_tier_from_reasons(result.reasons)
                 stats.add_qualified(tier)
                 qualified_mask.append(True)
+                # Store scoring result for confidence calculation later
+                scoring_results[idx] = result
             else:
                 category = categorize_rejection(result)
                 is_blocked = result.company_score < 0
                 stats.add_rejected(category, is_blocked)
                 qualified_mask.append(False)
+                # Collect rejected lead for export
+                rejected_lead = {
+                    "id": f"rejected_{len(rejected_leads)+1:03d}_{str(row.get('company', 'unknown'))[:20]}",
+                    "description": row['description'] if pd.notna(row.get('description')) else "",
+                    "company": row.get('company'),
+                    "title": row.get('title'),
+                    "rejection_reason": category,
+                    "score": result.score
+                }
+                rejected_leads.append(rejected_lead)
 
         df = df[qualified_mask]
         print(f"After filtering: {len(df)} qualified leads (filtered out {before_filter - len(df)})")
     else:
         print("Warning: No description column available for filtering")
 
-    return df, stats
+    return df, stats, rejected_leads, scoring_results
 
 
 def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
