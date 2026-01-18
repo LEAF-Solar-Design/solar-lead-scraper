@@ -66,21 +66,21 @@ Plans:
   1. Each run logs how many leads passed/rejected per rule
   2. Rejected leads can be exported for labeling review
   3. Qualified leads include confidence score in output
-**Plans**: 2 plans
+**Plans**: 2 plans (Wave 1: 04-01, Wave 2: 04-02)
 
 Plans:
-- [ ] 04-01: Add per-rule statistics logging
-- [ ] 04-02: Add rejected lead export and confidence scores
+- [ ] 04-01-PLAN.md - Add FilterStats dataclass and per-rule statistics logging (QUAL-01)
+- [ ] 04-02-PLAN.md - Add rejected lead export and confidence scores (QUAL-02, QUAL-03)
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Metrics Foundation | 2/2 | ✓ Complete | 2026-01-18 |
-| 2. Data-Driven Rule Refinement | 3/3 | ✓ Complete | 2026-01-18 |
-| 3. Architecture Refactoring | 3/3 | ✓ Complete | 2026-01-18 |
-| 4. Quality Instrumentation | 0/2 | Not started | - |
+| 1. Metrics Foundation | 2/2 | Complete | 2026-01-18 |
+| 2. Data-Driven Rule Refinement | 3/3 | Complete | 2026-01-18 |
+| 3. Architecture Refactoring | 3/3 | Complete | 2026-01-18 |
+| 4. Quality Instrumentation | 0/2 | Planned | - |
 
 ---
 *Roadmap created: 2026-01-18*
-*Last updated: 2026-01-18 after Phase 3 execution*
+*Last updated: 2026-01-18 after Phase 4 planning*
