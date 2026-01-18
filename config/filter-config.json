@@ -1,0 +1,94 @@
+{
+  "version": "1.0",
+  "threshold": 50.0,
+
+  "company_blocklist": [
+    "boeing", "northrop grumman", "lockheed", "lockheed martin",
+    "raytheon", "spacex", "blue origin", "general dynamics",
+    "bae systems", "l3harris", "leidos", "huntington ingalls",
+    "rtx", "rtx corporation", "sierra nevada corporation",
+    "intel", "nvidia", "amd", "qualcomm", "broadcom",
+    "texas instruments", "micron", "applied materials",
+    "lam research", "kla", "asml", "marvell", "microchip"
+  ],
+
+  "required_context": {
+    "patterns": ["solar", "pv", "photovoltaic"],
+    "description": "Must have solar/PV context to qualify"
+  },
+
+  "exclusions": {
+    "tennis": {
+      "patterns": ["tennis", "racquet", "racket", "pickleball", "badminton"],
+      "description": "Tennis stringing false positives"
+    },
+    "space": {
+      "patterns": ["spacecraft", "satellite", "space system", "aerospace", "starlink", "orbit", "launch vehicle", "avionics", "space exploration"],
+      "description": "Spacecraft solar panels"
+    },
+    "semiconductor": {
+      "patterns": ["semiconductor", "rtl", "asic", "fpga", "vlsi", "chip design", "physical verification", "synthesis", "place and route", "foundry", "wafer", "silicon", "integrated circuit", "ic design"],
+      "description": "Chip design industry"
+    },
+    "eda_tools": {
+      "patterns": ["cadence", "synopsys", "mentor graphics", "siemens eda", "virtuoso", "spectre", "innovus", "genus", "conformal", "calibre", "questa", "modelsim", "vcs", "verdi", "primetime", "icc2", "design compiler", "dc shell", "spyglass", "formality", "encounter", "ic compiler"],
+      "description": "EDA chip design tools"
+    },
+    "installer": {
+      "patterns": ["installer", "installation technician", "roof lead", "rooftop", "journeyman electrician", "apprentice electrician", "lineman", "lineworker", "o&m technician", "field technician", "service technician", "field service", "commissioning technician", "maintenance technician", "solar technician", "pv technician", "array supervisor", "stringer", "roofer", "foreman", "crew lead", "panel installer"],
+      "description": "Field installation roles"
+    },
+    "sales": {
+      "patterns": ["sales director", "sales manager", "marketing director", "marketing manager", "account executive", "business development", "sales representative", "sales team", "sales & marketing", "sales and marketing", "sales consultant", "sales engineer", "sales specialist", "account manager", "territory manager"],
+      "description": "Sales and marketing roles"
+    },
+    "management": {
+      "patterns": ["project manager", "construction manager", "operations manager", "program manager", "development manager", "site manager", "general manager", "director of operations", "vp ", "vice president", "chief ", "ceo", "cto", "cfo"],
+      "description": "Management roles"
+    },
+    "other_engineering": {
+      "patterns": ["application engineer", "applications engineer", "technical sales", "technical support", "field engineer", "commissioning engineer", "product engineer", "project engineer", "construction engineer", "site engineer", "structural engineer", "civil engineer", "mechanical engineer", "manufacturing engineer", "process engineer", "quality engineer", "systems engineer", "transmission engineer", "substation engineer", "protection and control", "p&c engineer", "relay engineer", "estimator", "preconstruction", "interconnection engineer", "grid engineer", "protection engineer", "metering engineer"],
+      "description": "Non-design engineering roles"
+    }
+  },
+
+  "positive_signals": {
+    "tier1_tools": {
+      "patterns": ["helioscope", "aurora solar", "pvsyst", "solaredge designer", "opensolaris"],
+      "weight": 100,
+      "description": "Solar-specific design tools - auto-qualify"
+    },
+    "tier2_strong": {
+      "patterns": ["string sizing", "stringing diagram", "stringing layout", "module layout", "array layout", "panel layout", "single line diagram", "one-line diagram", "sld ", "conduit schedule", "wiring schedule", "wire schedule", "permit set", "plan set", "permit package", "construction drawing", "voltage drop calculation", "voltage drop calc"],
+      "weight": 60,
+      "requires": "design_role",
+      "description": "Strong technical signals requiring design role"
+    },
+    "tier3_cad_project": {
+      "patterns_cad": ["autocad", "auto cad", "revit", "sketchup", "bluebeam", "solidworks"],
+      "patterns_project": ["solar array", "pv array", "solar installation", "pv installation", "solar project", "pv project", "solar system", "pv system", "residential solar", "commercial solar", "utility solar", "utility-scale solar", "rooftop solar", "ground mount solar", "carport solar"],
+      "weight": 40,
+      "requires": "design_role",
+      "description": "General CAD + design role + solar project type"
+    },
+    "tier4_title": {
+      "patterns": ["solar designer", "pv designer", "solar drafter", "pv drafter", "solar design engineer", "pv design engineer", "solar cad", "photovoltaic designer", "solar design technician"],
+      "weight": 80,
+      "check_area": "title",
+      "description": "Explicit solar design job titles"
+    },
+    "tier5_cad_design": {
+      "patterns_cad": ["autocad", "auto cad", "revit", "sketchup", "bluebeam", "solidworks"],
+      "weight": 30,
+      "requires": "design_role",
+      "description": "CAD tool + design role (with solar context from required_context)"
+    },
+    "tier6_design_titles": {
+      "patterns": ["electrical designer", "electrical drafter", "cad designer", "cad drafter", "cad technician", "cad operator", "design technician", "drafting technician", "bim modeler", "bim technician", "design assistant", "permit designer"],
+      "weight": 20,
+      "description": "Design role titles with solar context"
+    }
+  },
+
+  "design_role_indicators": ["designer", "drafter", "draftsman", "drafting", "cad ", "design engineer", "design technician", "cad technician"]
+}
