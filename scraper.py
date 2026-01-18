@@ -174,7 +174,12 @@ def description_matches(description: str, company_name: str = None) -> bool:
         'manufacturing engineer', 'process engineer', 'quality engineer',
         'systems engineer', 'transmission engineer', 'substation engineer',
         'protection and control', 'p&c engineer', 'relay engineer',
-        'estimator', 'preconstruction'
+        'estimator', 'preconstruction',
+        # Added in Phase 2 - utility/grid engineering false positives
+        'interconnection engineer',  # Utility interface role
+        'grid engineer',             # Grid/utility focus
+        'protection engineer',       # Utility protection systems
+        'metering engineer',         # Utility metering
     ]
     if any(term in desc_lower for term in other_eng_terms):
         return False
