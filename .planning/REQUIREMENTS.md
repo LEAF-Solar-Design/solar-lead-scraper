@@ -23,10 +23,10 @@ Requirements for improving lead qualification precision from ~3% to >20%.
 
 ### Architecture Refactoring
 
-- [ ] **ARCH-01**: Filter configuration externalized to JSON/YAML (not hardcoded in scraper.py)
-- [ ] **ARCH-02**: Tiered boolean filter converted to weighted scoring system
-- [ ] **ARCH-03**: Company classification separated from role classification
-- [ ] **ARCH-04**: Filter function returns score + reasons, not just boolean
+- [x] **ARCH-01**: Filter configuration externalized to JSON/YAML (not hardcoded in scraper.py)
+- [x] **ARCH-02**: Tiered boolean filter converted to weighted scoring system
+- [x] **ARCH-03**: Company classification separated from role classification
+- [x] **ARCH-04**: Filter function returns score + reasons, not just boolean
 
 ### Output Quality
 
@@ -73,10 +73,10 @@ Deferred until 50+ qualified examples available.
 | RULE-02 | Phase 2 | Complete |
 | RULE-03 | Phase 2 | Complete |
 | RULE-04 | Phase 2 | Complete |
-| ARCH-01 | Phase 3 | Pending |
-| ARCH-02 | Phase 3 | Pending |
-| ARCH-03 | Phase 3 | Pending |
-| ARCH-04 | Phase 3 | Pending |
+| ARCH-01 | Phase 3 | Complete |
+| ARCH-02 | Phase 3 | Complete |
+| ARCH-03 | Phase 3 | Complete |
+| ARCH-04 | Phase 3 | Complete |
 | QUAL-01 | Phase 4 | Pending |
 | QUAL-02 | Phase 4 | Pending |
 | QUAL-03 | Phase 4 | Pending |
@@ -88,4 +88,4 @@ Deferred until 50+ qualified examples available.
 
 ---
 *Requirements defined: 2026-01-18*
-*Last updated: 2026-01-18 after Phase 2 completion*
+*Last updated: 2026-01-18 after Phase 3 completion*
