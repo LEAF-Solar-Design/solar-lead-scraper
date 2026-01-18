@@ -19,14 +19,18 @@ class ScoringResult:
     """Result of scoring a job posting.
 
     Attributes:
-        score: Total numeric score (higher = better match)
+        score: Total numeric score (company_score + role_score)
         qualified: Whether score meets threshold
         reasons: List of human-readable scoring explanations
+        company_score: Points from company-level signals (blocklist, known companies)
+        role_score: Points from role/description signals (tools, titles, etc.)
         threshold: The threshold used for qualification
     """
     score: float
     qualified: bool
     reasons: list[str] = field(default_factory=list)
+    company_score: float = 0.0
+    role_score: float = 0.0
     threshold: float = 50.0
 
 
@@ -77,69 +81,63 @@ def get_config() -> dict:
     return _CONFIG
 
 
-def score_job(description: str, company_name: str = None, config: dict = None) -> ScoringResult:
-    """Score a job posting and return detailed results.
+def score_company(company_name: str, config: dict) -> tuple[float, list[str]]:
+    """Score based on company signals only.
+
+    Args:
+        company_name: Company name to check
+        config: Configuration dictionary
+
+    Returns:
+        Tuple of (score, reasons_list)
+        Score is -100 if blocklisted, 0 otherwise (future: positive signals for known solar companies)
+    """
+    if not company_name:
+        return (0.0, [])
+
+    company_lower = company_name.lower()
+
+    # Blocklist check
+    for blocked in config["company_blocklist"]:
+        if blocked in company_lower:
+            return (-100.0, [f"Company '{company_name}' in blocklist ({blocked})"])
+
+    # Future: Add positive company signals here (known solar companies)
+    # e.g., config.get("company_positive_signals", [])
+
+    return (0.0, [])
+
+
+def score_role(description: str, config: dict) -> tuple[float, list[str]]:
+    """Score based on role/description signals only.
 
     Args:
         description: Job description text
-        company_name: Optional company name for blocklist check
-        config: Optional config dict (uses get_config() if not provided)
+        config: Configuration dictionary
 
     Returns:
-        ScoringResult with score, qualified flag, and reasons list
+        Tuple of (score, reasons_list)
+        Score is sum of matched positive signals, -100 if exclusion matched
     """
-    if config is None:
-        config = get_config()
-
-    threshold = config.get("threshold", 50.0)
-    reasons = []
-    score = 0.0
-
-    # Company blocklist check FIRST (immediate disqualification)
-    if company_name:
-        company_lower = company_name.lower()
-        for blocked in config["company_blocklist"]:
-            if blocked in company_lower:
-                return ScoringResult(
-                    score=-100.0,
-                    qualified=False,
-                    reasons=[f"Company '{company_name}' in blocklist ({blocked})"],
-                    threshold=threshold
-                )
-
-    # No description = cannot qualify
     if not description or pd.isna(description):
-        return ScoringResult(
-            score=0.0,
-            qualified=False,
-            reasons=["No description provided"],
-            threshold=threshold
-        )
+        return (0.0, ["No description provided"])
 
     desc_lower = description.lower()
+    reasons = []
+    score = 0.0
 
     # Required context check (solar/PV)
     required = config["required_context"]["patterns"]
     has_required = any(p in desc_lower for p in required)
     if not has_required:
-        return ScoringResult(
-            score=0.0,
-            qualified=False,
-            reasons=["Missing required solar/PV context"],
-            threshold=threshold
-        )
+        return (0.0, ["Missing required solar/PV context"])
     reasons.append("+0: Has solar/PV context (required)")
 
     # Check all exclusions (any match = immediate -100)
     for name, excl in config["exclusions"].items():
         for pattern in excl["patterns"]:
             if pattern in desc_lower:
-                return ScoringResult(
-                    score=-100.0,
-                    qualified=False,
-                    reasons=[f"Excluded: {excl['description']} (matched '{pattern}')"],
-                    threshold=threshold
-                )
+                return (-100.0, [f"Excluded: {excl['description']} (matched '{pattern}')"])
 
     # Check design role indicators (used by multiple tiers)
     design_indicators = config["design_role_indicators"]
@@ -148,15 +146,15 @@ def score_job(description: str, company_name: str = None, config: dict = None) -
     # Score positive signals
     signals = config["positive_signals"]
 
-    # Tier 1: Solar-specific tools (auto-qualify)
+    # Tier 1: Solar-specific tools
     tier1 = signals["tier1_tools"]
     for pattern in tier1["patterns"]:
         if pattern in desc_lower:
             score += tier1["weight"]
             reasons.append(f"+{tier1['weight']}: {tier1['description']} ({pattern})")
-            break  # Only count once per tier
+            break
 
-    # Tier 2: Strong technical signals (require design role)
+    # Tier 2: Strong technical signals
     tier2 = signals["tier2_strong"]
     if has_design_role:
         for pattern in tier2["patterns"]:
@@ -174,7 +172,7 @@ def score_job(description: str, company_name: str = None, config: dict = None) -
             score += tier3["weight"]
             reasons.append(f"+{tier3['weight']}: {tier3['description']}")
 
-    # Tier 4: Title signals (check first 200 chars)
+    # Tier 4: Title signals
     tier4 = signals["tier4_title"]
     title_area = desc_lower[:200]
     for pattern in tier4["patterns"]:
@@ -183,7 +181,7 @@ def score_job(description: str, company_name: str = None, config: dict = None) -
             reasons.append(f"+{tier4['weight']}: {tier4['description']} ({pattern})")
             break
 
-    # Tier 5: CAD + design role (simpler)
+    # Tier 5: CAD + design role
     tier5 = signals["tier5_cad_design"]
     if has_design_role:
         has_cad = any(p in desc_lower for p in tier5["patterns_cad"])
@@ -199,14 +197,68 @@ def score_job(description: str, company_name: str = None, config: dict = None) -
             reasons.append(f"+{tier6['weight']}: {tier6['description']} ({pattern})")
             break
 
-    # Add design role indicator note
     if has_design_role:
         reasons.append("+0: Has design role indicator")
 
+    return (score, reasons)
+
+
+def score_job(description: str, company_name: str = None, config: dict = None) -> ScoringResult:
+    """Score a job posting and return detailed results.
+
+    Combines company-level and role-level scoring into a single result.
+
+    Args:
+        description: Job description text
+        company_name: Optional company name for blocklist check
+        config: Optional config dict (uses get_config() if not provided)
+
+    Returns:
+        ScoringResult with total score, company_score, role_score, and reasons
+    """
+    if config is None:
+        config = get_config()
+
+    threshold = config.get("threshold", 50.0)
+
+    # Score company separately
+    company_score, company_reasons = score_company(company_name, config)
+
+    # If company is blocklisted, short-circuit
+    if company_score < 0:
+        return ScoringResult(
+            score=company_score,
+            qualified=False,
+            reasons=company_reasons,
+            company_score=company_score,
+            role_score=0.0,
+            threshold=threshold
+        )
+
+    # Score role/description
+    role_score, role_reasons = score_role(description, config)
+
+    # If role is excluded, short-circuit
+    if role_score < 0:
+        return ScoringResult(
+            score=role_score,
+            qualified=False,
+            reasons=role_reasons,
+            company_score=company_score,
+            role_score=role_score,
+            threshold=threshold
+        )
+
+    # Combine scores
+    total_score = company_score + role_score
+    all_reasons = company_reasons + role_reasons
+
     return ScoringResult(
-        score=score,
-        qualified=score >= threshold,
-        reasons=reasons,
+        score=total_score,
+        qualified=total_score >= threshold,
+        reasons=all_reasons,
+        company_score=company_score,
+        role_score=role_score,
         threshold=threshold
     )
 
