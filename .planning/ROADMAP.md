@@ -21,11 +21,11 @@ Improve lead qualification precision from ~3% to >20% through a data-driven appr
   1. Running evaluate.py against labeled JSON files produces precision/recall metrics
   2. Golden test set created with known good/bad examples
   3. Current filter baseline precision is documented (expected ~3%)
-**Plans**: 2 plans
+**Plans**: 2 plans (Wave 1: 01-01, Wave 2: 01-02)
 
 Plans:
-- [ ] 01-01: Create evaluation script that loads labeled JSON and runs filter
-- [ ] 01-02: Create golden test set and document baseline metrics
+- [ ] 01-01-PLAN.md - Create evaluation infrastructure (evaluate.py, data directories, scikit-learn)
+- [ ] 01-02-PLAN.md - Create golden test set and document baseline metrics
 
 ### Phase 2: Data-Driven Rule Refinement
 **Goal**: Improve filter precision by adding rules derived from analysis of rejected/qualified leads
@@ -76,11 +76,11 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Metrics Foundation | 0/2 | Not started | - |
+| 1. Metrics Foundation | 0/2 | Planned | - |
 | 2. Data-Driven Rule Refinement | 0/3 | Not started | - |
 | 3. Architecture Refactoring | 0/3 | Not started | - |
 | 4. Quality Instrumentation | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-18*
-*Last updated: 2026-01-18 after requirements definition*
+*Last updated: 2026-01-18 after Phase 1 planning*
