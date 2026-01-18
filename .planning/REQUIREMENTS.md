@@ -30,9 +30,9 @@ Requirements for improving lead qualification precision from ~3% to >20%.
 
 ### Output Quality
 
-- [ ] **QUAL-01**: Each run logs filter statistics (passed/rejected per tier/rule)
-- [ ] **QUAL-02**: Rejected leads can be exported for labeling exercises
-- [ ] **QUAL-03**: Qualified leads include confidence score
+- [x] **QUAL-01**: Each run logs filter statistics (passed/rejected per tier/rule)
+- [x] **QUAL-02**: Rejected leads can be exported for labeling exercises
+- [x] **QUAL-03**: Qualified leads include confidence score
 
 ## v2 Requirements
 
@@ -77,9 +77,9 @@ Deferred until 50+ qualified examples available.
 | ARCH-02 | Phase 3 | Complete |
 | ARCH-03 | Phase 3 | Complete |
 | ARCH-04 | Phase 3 | Complete |
-| QUAL-01 | Phase 4 | Pending |
-| QUAL-02 | Phase 4 | Pending |
-| QUAL-03 | Phase 4 | Pending |
+| QUAL-01 | Phase 4 | Complete |
+| QUAL-02 | Phase 4 | Complete |
+| QUAL-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total
@@ -88,4 +88,4 @@ Deferred until 50+ qualified examples available.
 
 ---
 *Requirements defined: 2026-01-18*
-*Last updated: 2026-01-18 after Phase 3 completion*
+*Last updated: 2026-01-18 after Phase 4 completion*
