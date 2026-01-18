@@ -3,7 +3,7 @@
     "created": "2026-01-18",
     "purpose": "regression_testing",
     "criteria_version": "1.0",
-    "notes": "Curated test set for filter evaluation. Do not modify frequently."
+    "notes": "Curated test set for filter evaluation. Expanded in Phase 2 to cover EDA tools, installer roles, and utility engineering exclusions."
   },
   "items": [
     {
@@ -252,6 +252,48 @@
       "label": false,
       "category": "false_positive_blocked_company",
       "notes": "Tests company blocklist - Intel should be blocked despite CAD and solar mentions"
+    },
+    {
+      "id": "golden_neg_eda_01",
+      "description": "CAD Designer at chip company using Cadence Virtuoso for solar cell IC layout. You will create schematic and layout designs for power management ICs used in solar inverters. Experience with analog IC design and Virtuoso required. Understanding of photovoltaic power systems a plus.",
+      "label": false,
+      "category": "false_positive_eda_tools",
+      "notes": "Tests EDA tool exclusion - Cadence Virtuoso is chip design, not solar design"
+    },
+    {
+      "id": "golden_neg_eda_02",
+      "description": "Design Engineer using Synopsys Design Compiler for solar MPPT controller ASIC. You will perform RTL synthesis and timing analysis using PrimeTime. Knowledge of power electronics and solar energy conversion preferred. Join our team designing next-gen solar inverter chips.",
+      "label": false,
+      "category": "false_positive_eda_tools",
+      "notes": "Tests EDA tool exclusion - Synopsys tools indicate chip design role"
+    },
+    {
+      "id": "golden_neg_installer_stringer_01",
+      "description": "Solar Panel Stringer needed for installation crew. Join our team as a solar stringer laying panels on residential rooftops. You will work with crew lead to install solar arrays efficiently. No design work - this is physical installation labor. Training provided.",
+      "label": false,
+      "category": "false_positive_installer",
+      "notes": "Tests stringer exclusion - installation labor, not design"
+    },
+    {
+      "id": "golden_neg_installer_foreman_01",
+      "description": "Solar Installation Foreman at growing PV company. Lead a crew of installers on commercial solar projects. You will coordinate daily work, ensure safety compliance, and manage installation timelines. AutoCAD experience helpful for reading drawings but no design responsibility.",
+      "label": false,
+      "category": "false_positive_installer",
+      "notes": "Tests foreman exclusion - construction supervision, not design"
+    },
+    {
+      "id": "golden_neg_utility_interconnection_01",
+      "description": "Solar Interconnection Engineer at utility company. Manage utility interconnection process for solar generators. You will review interconnection applications, perform impact studies, and coordinate with solar developers. Knowledge of FERC regulations and utility tariffs required. Not a design role.",
+      "label": false,
+      "category": "false_positive_utility",
+      "notes": "Tests interconnection engineer exclusion - utility interface role, not PV design"
+    },
+    {
+      "id": "golden_neg_utility_grid_01",
+      "description": "Grid Engineer supporting solar integration at regional utility. Analyze grid impacts of solar penetration, develop interconnection requirements, and model distribution feeders with high solar adoption. PSS/E and CYME experience required. Focus is on grid, not PV system design.",
+      "label": false,
+      "category": "false_positive_utility",
+      "notes": "Tests grid engineer exclusion - utility grid focus, not PV design"
     }
   ]
 }
