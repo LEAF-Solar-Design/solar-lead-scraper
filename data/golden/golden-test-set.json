@@ -1,0 +1,241 @@
+{
+  "metadata": {
+    "created": "2026-01-18",
+    "purpose": "regression_testing",
+    "criteria_version": "1.0",
+    "notes": "Curated test set for filter evaluation. Do not modify frequently."
+  },
+  "items": [
+    {
+      "id": "golden_pos_tier1_01",
+      "description": "Solar Designer at SunPower Corporation. We are seeking a Solar Designer to join our residential design team. You will use Helioscope for system design, creating permit-ready packages for residential solar installations. Responsibilities include creating module layouts, stringing diagrams, and single-line diagrams. Requirements: 2+ years experience with Helioscope or similar solar design software, proficiency in AutoCAD, understanding of NEC code requirements. This is a full-time position supporting our west coast residential operations.",
+      "label": true,
+      "category": "tier1_tool_match",
+      "notes": "Tests Helioscope (tier 1 solar-specific tool) auto-qualification"
+    },
+    {
+      "id": "golden_pos_tier1_02",
+      "description": "PV System Designer at Soltage LLC. Join our utility-scale design team as a PV System Designer. You will utilize Aurora Solar and PVsyst for system modeling and energy production estimates. Responsibilities include designing ground-mount solar arrays, performing string sizing calculations, creating construction documents. Requirements: Bachelor's degree in engineering or related field, experience with Aurora Solar platform, strong knowledge of photovoltaic systems. Work remotely with occasional site visits.",
+      "label": true,
+      "category": "tier1_tool_match",
+      "notes": "Tests Aurora Solar and PVsyst (tier 1 tools) auto-qualification"
+    },
+    {
+      "id": "golden_pos_tier1_03",
+      "description": "Solar Design Engineer at EDP Renewables. We are hiring a Solar Design Engineer for our utility-scale solar division. You will use PVsyst for energy modeling and system optimization on projects ranging from 50MW to 500MW. Responsibilities include array layout optimization, shade analysis, performance modeling, and design documentation. Requirements: Engineering degree, 3+ years utility-scale solar experience, proficiency with PVsyst software. This role offers competitive salary and comprehensive benefits.",
+      "label": true,
+      "category": "tier1_tool_match",
+      "notes": "Tests PVsyst (tier 1 tool) for utility-scale solar design"
+    },
+    {
+      "id": "golden_pos_tier2_01",
+      "description": "AutoCAD Drafter - Solar Division at CleanTech Engineering. We need an AutoCAD Drafter to create stringing diagrams and single line diagrams for solar arrays. You will prepare permit packages including site plans, electrical schematics, and equipment schedules. This position requires proficiency in AutoCAD, experience creating construction documents, and attention to detail. Knowledge of solar PV systems preferred but not required. Full-time position with benefits in our Phoenix office.",
+      "label": true,
+      "category": "tier2_strong_signals",
+      "notes": "Tests stringing diagrams + single line diagrams (tier 2 strong signals)"
+    },
+    {
+      "id": "golden_pos_tier2_02",
+      "description": "CAD Designer - Permit Sets at SolarCity Design Services. Join our permit design team as a CAD Designer creating permit packages and plan sets for rooftop solar installations. You will produce module layouts, wiring schedules, and conduit schedules for residential and commercial solar projects. Requirements: AutoCAD proficiency, ability to read electrical schematics, experience with permit submittal processes. Fast-paced environment, high volume of projects.",
+      "label": true,
+      "category": "tier2_strong_signals",
+      "notes": "Tests permit packages, plan sets, wiring schedules (tier 2 signals)"
+    },
+    {
+      "id": "golden_pos_tier2_03",
+      "description": "Solar Designer creating module layouts and wiring schedules at Renewable Energy Systems Inc. We are looking for a Solar Designer to join our commercial design team. Responsibilities include creating array layouts, voltage drop calculations, and construction drawings for commercial solar installations. You will work with engineering team to optimize system designs and prepare permit-ready documentation. AutoCAD and Bluebeam experience required.",
+      "label": true,
+      "category": "tier2_strong_signals",
+      "notes": "Tests module layouts, voltage drop calculations, construction drawings"
+    },
+    {
+      "id": "golden_pos_tier3_01",
+      "description": "Electrical Designer using AutoCAD for commercial solar installations at BrightSun Energy. We are seeking an Electrical Designer to support our commercial solar project team. You will create electrical drawings using AutoCAD for solar array installations ranging from 100kW to 5MW. Responsibilities include conduit routing, panel schedules, and interconnection drawings. Requirements: 3+ years electrical CAD experience, knowledge of NEC code, ability to interpret engineering specifications.",
+      "label": true,
+      "category": "tier3_cad_with_context",
+      "notes": "Tests general CAD tool (AutoCAD) + design role + solar project type"
+    },
+    {
+      "id": "golden_pos_tier3_02",
+      "description": "CAD Technician working on residential solar permit sets at Premier Solar Solutions. Join our design team as a CAD Technician preparing permit documentation for residential solar installations. You will use AutoCAD to create site plans, roof layouts, and electrical details. This position requires attention to detail and ability to manage multiple projects. Experience with Revit a plus. Fast turnaround times expected, averaging 10-15 permit sets per week.",
+      "label": true,
+      "category": "tier3_cad_with_context",
+      "notes": "Tests CAD Technician + residential solar permit sets"
+    },
+    {
+      "id": "golden_pos_tier4_01",
+      "description": "Solar Designer at Kimley-Horn doing PV system design for our renewable energy practice. This role involves designing rooftop and ground-mount solar systems for commercial and municipal clients. You will coordinate with electrical engineers and project managers to deliver complete design packages. Requirements: Bachelor's degree in engineering technology or related field, CAD proficiency, strong communication skills. Kimley-Horn is an employee-owned firm offering excellent benefits.",
+      "label": true,
+      "category": "tier4_title_signals",
+      "notes": "Tests explicit 'Solar Designer' in title area"
+    },
+    {
+      "id": "golden_pos_tier4_02",
+      "description": "PV Design Engineer at Shoals Technologies Group. We are hiring a PV Design Engineer to support our utility-scale solar product line. You will design cable harness assemblies and electrical balance of system components for large solar installations. Responsibilities include creating detailed drawings, working with manufacturing team, and supporting field installation. Engineering degree and solar industry experience required. Position is based in Portland, Tennessee.",
+      "label": true,
+      "category": "tier4_title_signals",
+      "notes": "Tests explicit 'PV Design Engineer' title"
+    },
+    {
+      "id": "golden_pos_tier5_01",
+      "description": "AutoCAD Designer at solar company working on array layouts. SunRise Solar is hiring an AutoCAD Designer to create detailed drawings for our solar installation projects. You will produce array layouts, equipment details, and as-built documentation. This is an entry-level position with training provided on solar-specific requirements. Basic AutoCAD skills required, we will teach you the solar design process. Great opportunity to start a career in renewable energy.",
+      "label": true,
+      "category": "tier5_cad_design_role",
+      "notes": "Tests CAD + design role + solar mentioned (tier 5)"
+    },
+    {
+      "id": "golden_pos_tier5_02",
+      "description": "Revit Designer for PV Projects at Green Power Engineering. We need a Revit Designer to create 3D models and construction documents for solar PV projects. You will coordinate with architects and engineers to integrate solar systems into building designs. Experience with Revit required, solar experience preferred. This position offers flexible hours and remote work options. Join our growing renewable energy team.",
+      "label": true,
+      "category": "tier5_cad_design_role",
+      "notes": "Tests Revit + Designer + PV context"
+    },
+    {
+      "id": "golden_pos_tier6_01",
+      "description": "Electrical Drafter at solar EPC company. SolarMax Construction is looking for an Electrical Drafter to join our engineering department. You will create electrical drawings for utility-scale solar projects including medium voltage collection systems, substation layouts, and interconnection facilities. Requirements: 5+ years electrical drafting experience, AutoCAD proficiency, ability to work from engineering redlines. We offer competitive pay and full benefits package.",
+      "label": true,
+      "category": "tier6_solar_design_titles",
+      "notes": "Tests Electrical Drafter + solar company context"
+    },
+    {
+      "id": "golden_pos_tier6_02",
+      "description": "CAD Technician position at NextEra Energy Resources supporting our solar development team. You will prepare site plans, equipment layouts, and permit drawings for utility-scale solar facilities. This role requires AutoCAD proficiency and ability to work independently. Experience in renewable energy or power generation preferred. NextEra is the world's largest generator of renewable energy from wind and solar.",
+      "label": true,
+      "category": "tier6_solar_design_titles",
+      "notes": "Tests CAD Technician + solar development context"
+    },
+    {
+      "id": "golden_pos_tier6_03",
+      "description": "BIM Modeler for Solar Projects at Burns & McDonnell. Join our power delivery team as a BIM Modeler creating 3D models and construction documents for solar substations and collection systems. You will work with engineers to develop accurate models and coordinate with other disciplines. Revit and AutoCAD experience required. This position is based in Kansas City with hybrid work options available.",
+      "label": true,
+      "category": "tier6_solar_design_titles",
+      "notes": "Tests BIM Modeler + solar project context"
+    },
+    {
+      "id": "golden_pos_tier6_04",
+      "description": "Permit Designer at Lumio Solar. We are hiring a Permit Designer to create residential solar permit packages. You will prepare site plans, structural calculations, and electrical diagrams for permit submittal. High volume position processing 15-20 permits daily. Requirements: CAD experience, attention to detail, ability to meet deadlines. We provide comprehensive training on our permit process and solar design standards.",
+      "label": true,
+      "category": "tier6_solar_design_titles",
+      "notes": "Tests Permit Designer + solar permit context"
+    },
+    {
+      "id": "golden_neg_tennis_01",
+      "description": "Tennis Racquet Stringing Technician at Wilson Sporting Goods. We are looking for a skilled Stringing Technician to join our pro shop team. You will provide professional racquet stringing services for tennis, badminton, and squash racquets. Responsibilities include stringing racquets to customer specifications, maintaining stringing equipment, and advising customers on string selection. Solar training provided - our shop has solar panels and we promote sustainability. Experience with electronic stringing machines preferred.",
+      "label": false,
+      "category": "false_positive_tennis",
+      "notes": "Tests tennis/racquet exclusion - contains 'stringing' and 'solar' but tennis context"
+    },
+    {
+      "id": "golden_neg_aerospace_01",
+      "description": "Electrical Engineer at SpaceX working on spacecraft solar panels. Join our power systems team designing solar arrays for Dragon capsule and Starlink satellites. You will perform electrical analysis, component selection, and system integration for space-qualified solar panels. Requirements: BSEE/MSEE, experience with spacecraft power systems, knowledge of radiation-hardened components. This position is in Hawthorne, California. US citizenship required for ITAR compliance.",
+      "label": false,
+      "category": "false_positive_aerospace",
+      "notes": "Tests space/aerospace exclusion - solar panels on spacecraft"
+    },
+    {
+      "id": "golden_neg_aerospace_02",
+      "description": "CAD Designer at Boeing working on satellite systems. Join our space division creating detailed drawings for communication satellite platforms. You will design structural brackets, harness routing, and solar array deployment mechanisms. AutoCAD and CATIA experience required. Must be comfortable working in a cleanroom environment. Security clearance required. Position is based in El Segundo, California with occasional travel to launch facilities.",
+      "label": false,
+      "category": "false_positive_aerospace",
+      "notes": "Tests satellite/space context exclusion"
+    },
+    {
+      "id": "golden_neg_aerospace_03",
+      "description": "Solar Array Engineer at Northrop Grumman for space systems. We are hiring an engineer to design deployable solar arrays for earth observation satellites. You will perform structural analysis, deployment mechanism design, and thermal analysis for space-qualified solar panels operating in orbit. This role requires experience with space mechanisms and understanding of the orbital environment. Position supports multiple NASA and DOD programs.",
+      "label": false,
+      "category": "false_positive_aerospace",
+      "notes": "Tests orbit/satellite/space systems exclusion"
+    },
+    {
+      "id": "golden_neg_semiconductor_01",
+      "description": "ASIC Design Engineer at semiconductor company. Join our digital design team working on power management ICs for solar inverters. You will perform RTL design, synthesis, and verification for mixed-signal ASICs. Requirements: MSEE, experience with Verilog/SystemVerilog, knowledge of UVM methodology. Our chips enable efficient solar energy conversion. Position is in San Jose with competitive compensation.",
+      "label": false,
+      "category": "false_positive_semiconductor",
+      "notes": "Tests semiconductor/ASIC/RTL exclusion - solar mentioned but chip design role"
+    },
+    {
+      "id": "golden_neg_semiconductor_02",
+      "description": "CAD Engineer at chip company doing physical verification. Join our physical design team performing DRC, LVS, and antenna checks for solar cell power management ICs. You will use Calibre and IC Validator for sign-off verification. Requirements: 3+ years physical verification experience, knowledge of advanced node design rules, scripting skills. We design the chips that make solar inverters efficient. Position in Austin, Texas.",
+      "label": false,
+      "category": "false_positive_semiconductor",
+      "notes": "Tests semiconductor physical verification/foundry exclusion"
+    },
+    {
+      "id": "golden_neg_installer_01",
+      "description": "Solar Installation Technician doing rooftop installs at Sunrun. Join our installation crew as a Solar Technician installing residential solar systems. You will mount solar panels, install racking systems, and perform electrical connections. Requirements: ability to work on rooftops, comfortable with heights, valid driver's license. No experience required - we provide comprehensive training. Physical job requiring lifting up to 50 lbs. Competitive hourly rate plus benefits.",
+      "label": false,
+      "category": "false_positive_installer",
+      "notes": "Tests installer/installation technician exclusion"
+    },
+    {
+      "id": "golden_neg_installer_02",
+      "description": "PV Technician - field service role at Tesla Energy. We need a PV Technician to perform service calls on existing solar installations. You will troubleshoot system issues, replace faulty equipment, and perform routine maintenance. Requirements: electrical experience, ability to read wiring diagrams, customer service skills. Company vehicle and tools provided. Must be willing to travel within assigned territory. This is a field-based position with no office work.",
+      "label": false,
+      "category": "false_positive_installer",
+      "notes": "Tests field technician/service role exclusion"
+    },
+    {
+      "id": "golden_neg_installer_03",
+      "description": "Journeyman Electrician for solar installations at SunPower. We are hiring a licensed Journeyman Electrician to perform electrical work on residential and commercial solar installations. Responsibilities include running conduit, pulling wire, making electrical connections, and commissioning systems. Valid journeyman electrical license required. Experience with solar preferred but not required. Union shop with excellent benefits and prevailing wage rates.",
+      "label": false,
+      "category": "false_positive_installer",
+      "notes": "Tests journeyman electrician exclusion"
+    },
+    {
+      "id": "golden_neg_sales_01",
+      "description": "Solar Sales Engineer at residential solar company. Join our sales team as a Sales Engineer conducting site assessments and system proposals. You will meet with homeowners, evaluate roof conditions, design preliminary system layouts using Aurora Solar, and present proposals. This is a customer-facing role requiring strong communication skills. Base salary plus commission, uncapped earning potential. Company vehicle and laptop provided.",
+      "label": false,
+      "category": "false_positive_sales",
+      "notes": "Tests sales engineer exclusion - uses design tool but sales role"
+    },
+    {
+      "id": "golden_neg_sales_02",
+      "description": "Business Development Manager at solar company. We are looking for a Business Development Manager to grow our commercial solar business. You will identify prospects, develop relationships with key decision makers, and close deals. Responsibilities include market analysis, proposal development, and contract negotiation. MBA preferred, 5+ years B2B sales experience required. Strong understanding of solar PV technology a plus. High earning potential with competitive base and commission structure.",
+      "label": false,
+      "category": "false_positive_sales",
+      "notes": "Tests business development/sales management exclusion"
+    },
+    {
+      "id": "golden_neg_management_01",
+      "description": "Solar Project Manager overseeing construction at First Solar. We are hiring a Project Manager to lead utility-scale solar construction projects. You will manage contractors, track schedules, control budgets, and ensure safety compliance. Responsibilities include stakeholder communication, change order management, and project closeout. PMP certification preferred. 5+ years construction management experience required. Position involves 75% travel to project sites across the southwest.",
+      "label": false,
+      "category": "false_positive_management",
+      "notes": "Tests project manager exclusion"
+    },
+    {
+      "id": "golden_neg_management_02",
+      "description": "Construction Manager at utility-scale solar site. Join AES as a Construction Manager overseeing installation of a 200MW solar project. You will manage daily construction activities, coordinate subcontractors, and ensure quality standards are met. Requirements: 10+ years construction experience, ability to manage large teams, strong problem-solving skills. On-site position in rural Texas with housing allowance provided. Duration: 18 months with potential for follow-on projects.",
+      "label": false,
+      "category": "false_positive_management",
+      "notes": "Tests construction manager exclusion"
+    },
+    {
+      "id": "golden_neg_other_eng_01",
+      "description": "Civil Engineer on solar farm project at Mortenson Construction. We need a Civil Engineer to design grading and drainage for utility-scale solar facilities. You will perform earthwork calculations, design stormwater management systems, and prepare civil permit packages. PE license required, experience with solar sites preferred. This role focuses on civil infrastructure, not electrical or PV system design. Position based in Minneapolis with project travel.",
+      "label": false,
+      "category": "false_positive_other_engineering",
+      "notes": "Tests civil engineer exclusion - solar project but civil role"
+    },
+    {
+      "id": "golden_neg_other_eng_02",
+      "description": "Structural Engineer for solar carport at Bechtel Engineering. Join our structures team designing steel canopy structures for solar carport installations. You will perform structural analysis, develop connection details, and coordinate with architects. PE license and steel design experience required. This position focuses on the structural support systems, not the solar PV electrical design. AutoCAD and STAAD Pro experience preferred.",
+      "label": false,
+      "category": "false_positive_other_engineering",
+      "notes": "Tests structural engineer exclusion - solar context but structural role"
+    },
+    {
+      "id": "golden_neg_utility_01",
+      "description": "Transmission Engineer at utility company working on solar interconnection. Join Duke Energy as a Transmission Engineer performing system impact studies for solar generator interconnection requests. You will use PSS/E for power flow analysis and develop interconnection requirements. Knowledge of NERC reliability standards required. This is a desk-based engineering position in our grid planning department. Position does not involve solar PV system design.",
+      "label": false,
+      "category": "false_positive_utility",
+      "notes": "Tests transmission engineer exclusion - solar mentioned but utility role"
+    },
+    {
+      "id": "golden_neg_utility_02",
+      "description": "Substation Engineer working on solar interconnection at NextEra Transmission. We are hiring a Substation Engineer to design collector substations for solar facilities. You will design protection and control systems, specify substation equipment, and coordinate with transmission providers. PE license required, experience with medium voltage switchgear preferred. This role focuses on substation design, not solar array or PV system design.",
+      "label": false,
+      "category": "false_positive_utility",
+      "notes": "Tests substation engineer exclusion - solar interconnection but substation focus"
+    }
+  ]
+}
