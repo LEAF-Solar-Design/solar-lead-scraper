@@ -378,8 +378,77 @@ def description_matches(description: str, company_name: str = None) -> bool:
     return result.qualified
 
 
-def scrape_solar_jobs() -> pd.DataFrame:
-    """Scrape solar design/CAD jobs from multiple sources."""
+def categorize_rejection(result: ScoringResult) -> str:
+    """Categorize a rejection reason for statistics.
+
+    Maps detailed rejection reasons to config section names for aggregation.
+
+    Args:
+        result: ScoringResult from score_job()
+
+    Returns:
+        Category string matching config structure
+    """
+    if result.company_score < 0:
+        return "company_blocklist"
+
+    if not result.reasons:
+        return "unknown"
+
+    reason = result.reasons[0].lower()
+
+    if "missing required" in reason or "no description" in reason:
+        return "no_solar_context"
+
+    if "excluded" in reason:
+        if any(x in reason for x in ["installer", "stringer", "roofer", "foreman", "crew"]):
+            return "exclusions.installer"
+        if any(x in reason for x in ["interconnection", "grid", "protection", "metering"]):
+            return "exclusions.utility"
+        if any(x in reason for x in ["cadence", "synopsys", "mentor", "eda", "asic", "verilog"]):
+            return "exclusions.eda_tools"
+        if any(x in reason for x in ["satellite", "spacecraft", "orbit", "rocket"]):
+            return "exclusions.aerospace"
+        if any(x in reason for x in ["tennis", "racquet", "badminton"]):
+            return "exclusions.tennis"
+        return "exclusions.other"
+
+    return "below_threshold"
+
+
+def extract_tier_from_reasons(reasons: list[str]) -> str:
+    """Extract the highest tier matched from scoring reasons.
+
+    Args:
+        reasons: List of scoring reasons from ScoringResult
+
+    Returns:
+        Tier string like "tier1", "tier2", etc. or "unknown"
+    """
+    for reason in reasons:
+        if reason.startswith("+") and "tier" not in reason.lower():
+            # Parse tier from reason like "+100: Tier 1 solar tool"
+            if "Tier 1" in reason or "tier1" in reason.lower():
+                return "tier1"
+            elif "Tier 2" in reason or "tier2" in reason.lower():
+                return "tier2"
+            elif "Tier 3" in reason or "tier3" in reason.lower():
+                return "tier3"
+            elif "Tier 4" in reason or "tier4" in reason.lower():
+                return "tier4"
+            elif "Tier 5" in reason or "tier5" in reason.lower():
+                return "tier5"
+            elif "Tier 6" in reason or "tier6" in reason.lower():
+                return "tier6"
+    return "unknown"
+
+
+def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats]:
+    """Scrape solar design/CAD jobs from multiple sources.
+
+    Returns:
+        Tuple of (DataFrame of qualified jobs, FilterStats with run statistics)
+    """
 
     # Wide net search - generic role names that our filter will narrow down
     # The filter is strict, so we can afford to search broadly here
@@ -465,21 +534,39 @@ def scrape_solar_jobs() -> pd.DataFrame:
 
     if not all_jobs:
         print("No jobs found!")
-        return pd.DataFrame()
+        return pd.DataFrame(), FilterStats()
 
     # Combine all results
     df = pd.concat(all_jobs, ignore_index=True)
     print(f"\nTotal jobs found: {len(df)}")
 
+    # Collect filter statistics
+    stats = FilterStats()
+
     # Filter by description content
     if 'description' in df.columns:
         before_filter = len(df)
-        df = df[df.apply(lambda row: description_matches(row['description'], row.get('company')), axis=1)]
+        qualified_mask = []
+
+        for idx, row in df.iterrows():
+            result = score_job(row['description'], row.get('company'))
+
+            if result.qualified:
+                tier = extract_tier_from_reasons(result.reasons)
+                stats.add_qualified(tier)
+                qualified_mask.append(True)
+            else:
+                category = categorize_rejection(result)
+                is_blocked = result.company_score < 0
+                stats.add_rejected(category, is_blocked)
+                qualified_mask.append(False)
+
+        df = df[qualified_mask]
         print(f"After filtering: {len(df)} qualified leads (filtered out {before_filter - len(df)})")
     else:
         print("Warning: No description column available for filtering")
 
-    return df
+    return df, stats
 
 
 def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
