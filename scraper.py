@@ -378,6 +378,61 @@ def description_matches(description: str, company_name: str = None) -> bool:
     return result.qualified
 
 
+def export_rejected_leads(
+    rejected_leads: list[dict],
+    output_dir: Path,
+    run_id: str,
+    max_export: int = 100
+) -> Path:
+    """Export rejected leads for labeling review.
+
+    Exports rejected leads in the same schema as golden-test-set.json
+    for easy import into labeling workflow after human review.
+
+    Args:
+        rejected_leads: List of dicts with keys: id, description, company, title, rejection_reason, score
+        output_dir: Directory to write JSON file
+        run_id: Timestamp or identifier for this run
+        max_export: Maximum leads to export (default 100 to avoid huge files)
+
+    Returns:
+        Path to the created file
+    """
+    # Limit export size
+    to_export = rejected_leads[:max_export]
+
+    # Convert to labeled data schema
+    items = []
+    for lead in to_export:
+        item = {
+            "id": lead.get("id", f"rejected_{len(items)+1:03d}"),
+            "description": lead.get("description", "")[:2000],  # Truncate long descriptions
+            "label": False,  # Presumed false, reviewer confirms or changes to true
+            "company": lead.get("company"),
+            "title": lead.get("title"),
+            "notes": f"Rejected: {lead.get('rejection_reason', 'unknown')} (score: {lead.get('score', 0)})"
+        }
+        items.append(item)
+
+    export_data = {
+        "metadata": {
+            "created": datetime.now().isoformat(),
+            "purpose": "labeling_review",
+            "run_id": run_id,
+            "count": len(items),
+            "total_rejected": len(rejected_leads),
+            "notes": "Review and change label to true for any false negatives"
+        },
+        "items": items
+    }
+
+    filepath = output_dir / f"rejected_leads_{run_id}.json"
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(export_data, f, indent=2)
+
+    return filepath
+
+
 def categorize_rejection(result: ScoringResult) -> str:
     """Categorize a rejection reason for statistics.
 
