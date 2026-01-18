@@ -642,9 +642,13 @@ def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
     return df, stats, rejected_leads, scoring_results
 
 
-def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
-    """Process and dedupe jobs, extract company info."""
+def process_jobs(df: pd.DataFrame, scoring_results: dict = None) -> pd.DataFrame:
+    """Process and dedupe jobs, extract company info.
 
+    Args:
+        df: DataFrame of job listings
+        scoring_results: Optional dict mapping row indices to ScoringResult for confidence
+    """
     if df.empty:
         return df
 
@@ -652,6 +656,18 @@ def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
     columns_to_keep = ['company', 'title', 'location', 'job_url']
     available_cols = [c for c in columns_to_keep if c in df.columns]
     df = df[available_cols].copy()
+
+    # Add confidence score before deduplication (while we still have original indices)
+    if scoring_results:
+        def get_confidence(idx):
+            result = scoring_results.get(idx)
+            if result and result.qualified:
+                # Score 50 = threshold (50% confidence), 100+ = 100% confidence
+                return min(100.0, result.score)
+            return None
+        df['confidence_score'] = df.index.map(get_confidence)
+    else:
+        df['confidence_score'] = None
 
     # Remove rows without company name
     df = df[df['company'].notna() & (df['company'] != '')]
@@ -677,7 +693,7 @@ def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
     df['google_enduser'] = df.apply(lambda row: generate_linkedin_enduser_search_url(row['company'], row['job_title']), axis=1)
 
     # Reorder columns
-    final_columns = ['company', 'domain', 'job_title', 'location', 'posting_url', 'linkedin_managers', 'linkedin_hiring', 'linkedin_role', 'google_enduser', 'date_scraped']
+    final_columns = ['company', 'domain', 'job_title', 'location', 'confidence_score', 'posting_url', 'linkedin_managers', 'linkedin_hiring', 'linkedin_role', 'google_enduser', 'date_scraped']
     df = df[[c for c in final_columns if c in df.columns]]
 
     return df
@@ -719,29 +735,38 @@ def main():
     print()
 
     # Scrape jobs
-    raw_jobs, stats = scrape_solar_jobs()
+    raw_jobs, stats, rejected_leads, scoring_results = scrape_solar_jobs()
+
+    if raw_jobs.empty:
+        print("No jobs to process. Exiting.")
+        # Still print stats even if empty
+        print_filter_stats(stats)
+        return
+
+    # Process and dedupe
+    leads = process_jobs(raw_jobs, scoring_results)
+
+    if leads.empty:
+        print("No leads after processing. Exiting.")
+        print_filter_stats(stats)
+        return
 
     # Print filter statistics
     print_filter_stats(stats)
 
-    if raw_jobs.empty:
-        print("No jobs to process. Exiting.")
-        return
-
-    # Process and dedupe
-    leads = process_jobs(raw_jobs)
-
-    if leads.empty:
-        print("No leads after processing. Exiting.")
-        return
-
-    # Save to CSV
+    # Ensure output directory exists
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(exist_ok=True)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_file = output_dir / f"solar_leads_{timestamp}.csv"
 
+    # Export rejected leads for labeling review
+    if rejected_leads:
+        rejected_path = export_rejected_leads(rejected_leads, output_dir, timestamp)
+        print(f"\nExported {min(100, len(rejected_leads))} rejected leads to: {rejected_path}")
+
+    # Save qualified leads to CSV
+    output_file = output_dir / f"solar_leads_{timestamp}.csv"
     leads.to_csv(output_file, index=False)
 
     print()
