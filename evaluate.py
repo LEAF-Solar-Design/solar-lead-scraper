@@ -110,7 +110,7 @@ def evaluate(items: list[dict], verbose: bool = False) -> dict:
 
     for item in items:
         expected = item["label"]
-        predicted = description_matches(item["description"])
+        predicted = description_matches(item["description"], item.get("company"))
 
         y_true.append(expected)
         y_pred.append(predicted)
