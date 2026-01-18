@@ -1,0 +1,86 @@
+# Roadmap: Solar Lead Scraper
+
+## Overview
+
+Improve lead qualification precision from ~3% to >20% through a data-driven approach: first establish measurement infrastructure to track progress, then refine rules based on labeled data analysis, then refactor the filter architecture for maintainability and scoring, and finally add quality instrumentation for ongoing optimization.
+
+## Phases
+
+- [ ] **Phase 1: Metrics Foundation** - Establish baseline measurements and evaluation infrastructure
+- [ ] **Phase 2: Data-Driven Rule Refinement** - Add exclusions and inclusions derived from labeled data
+- [ ] **Phase 3: Architecture Refactoring** - Convert to scoring system with externalized config
+- [ ] **Phase 4: Quality Instrumentation** - Add logging, confidence scores, and export tools
+
+## Phase Details
+
+### Phase 1: Metrics Foundation
+**Goal**: Establish measurement infrastructure to track precision/recall before making filter changes
+**Depends on**: Nothing (first phase)
+**Requirements**: METR-01, METR-02, METR-03, METR-04
+**Success Criteria** (what must be TRUE):
+  1. Running evaluate.py against labeled JSON files produces precision/recall metrics
+  2. Golden test set created with known good/bad examples
+  3. Current filter baseline precision is documented (expected ~3%)
+**Plans**: 2 plans
+
+Plans:
+- [ ] 01-01: Create evaluation script that loads labeled JSON and runs filter
+- [ ] 01-02: Create golden test set and document baseline metrics
+
+### Phase 2: Data-Driven Rule Refinement
+**Goal**: Improve filter precision by adding rules derived from analysis of rejected/qualified leads
+**Depends on**: Phase 1
+**Requirements**: RULE-01, RULE-02, RULE-03, RULE-04
+**Success Criteria** (what must be TRUE):
+  1. Company blocklist blocks aerospace/semiconductor false positives
+  2. New role exclusions block installer/field tech false positives
+  3. Precision improves measurably (>5%) on golden test set
+**Plans**: 3 plans
+
+Plans:
+- [ ] 02-01: Analyze rejected leads to extract false positive patterns
+- [ ] 02-02: Implement company blocklist
+- [ ] 02-03: Add missing role and tool exclusions
+
+### Phase 3: Architecture Refactoring
+**Goal**: Refactor filter from boolean tiers to weighted scoring with external configuration
+**Depends on**: Phase 2
+**Requirements**: ARCH-01, ARCH-02, ARCH-03, ARCH-04
+**Success Criteria** (what must be TRUE):
+  1. Filter configuration lives in JSON/YAML file, not hardcoded
+  2. Filter returns numeric score, not boolean
+  3. Company signals scored separately from role signals
+  4. Threshold for "qualified" is configurable
+**Plans**: 3 plans
+
+Plans:
+- [ ] 03-01: Extract filter terms to configuration file
+- [ ] 03-02: Implement weighted scoring engine
+- [ ] 03-03: Separate company and role classification
+
+### Phase 4: Quality Instrumentation
+**Goal**: Add observability to understand filter behavior and enable continuous improvement
+**Depends on**: Phase 3
+**Requirements**: QUAL-01, QUAL-02, QUAL-03
+**Success Criteria** (what must be TRUE):
+  1. Each run logs how many leads passed/rejected per rule
+  2. Rejected leads can be exported for labeling review
+  3. Qualified leads include confidence score in output
+**Plans**: 2 plans
+
+Plans:
+- [ ] 04-01: Add per-rule statistics logging
+- [ ] 04-02: Add rejected lead export and confidence scores
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Metrics Foundation | 0/2 | Not started | - |
+| 2. Data-Driven Rule Refinement | 0/3 | Not started | - |
+| 3. Architecture Refactoring | 0/3 | Not started | - |
+| 4. Quality Instrumentation | 0/2 | Not started | - |
+
+---
+*Roadmap created: 2026-01-18*
+*Last updated: 2026-01-18 after requirements definition*
