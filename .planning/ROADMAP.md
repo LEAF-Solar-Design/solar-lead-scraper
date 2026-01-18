@@ -51,12 +51,12 @@ Plans:
   2. Filter returns numeric score, not boolean
   3. Company signals scored separately from role signals
   4. Threshold for "qualified" is configurable
-**Plans**: 3 plans
+**Plans**: 3 plans (Wave 1: 03-01, Wave 2: 03-02, Wave 3: 03-03)
 
 Plans:
-- [ ] 03-01: Extract filter terms to configuration file
-- [ ] 03-02: Implement weighted scoring engine
-- [ ] 03-03: Separate company and role classification
+- [ ] 03-01-PLAN.md - Extract filter terms to JSON configuration file (ARCH-01)
+- [ ] 03-02-PLAN.md - Implement weighted scoring engine with ScoringResult (ARCH-02, ARCH-04)
+- [ ] 03-03-PLAN.md - Separate company and role classification (ARCH-03)
 
 ### Phase 4: Quality Instrumentation
 **Goal**: Add observability to understand filter behavior and enable continuous improvement
@@ -78,9 +78,9 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Metrics Foundation | 2/2 | ✓ Complete | 2026-01-18 |
 | 2. Data-Driven Rule Refinement | 3/3 | ✓ Complete | 2026-01-18 |
-| 3. Architecture Refactoring | 0/3 | Not started | - |
+| 3. Architecture Refactoring | 0/3 | Planned | - |
 | 4. Quality Instrumentation | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-18*
-*Last updated: 2026-01-18 after Phase 2 execution*
+*Last updated: 2026-01-18 after Phase 3 planning*
