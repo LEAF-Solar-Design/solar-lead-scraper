@@ -268,92 +268,20 @@ def guess_domain(company_name: str) -> str:
 
 
 def description_matches(description: str, company_name: str = None) -> bool:
-    """Check if job description matches our criteria for solar design roles.
+    """Check if job description matches solar design criteria.
 
-    All filter terms are loaded from config/filter-config.json.
+    DEPRECATED: Use score_job() for detailed scoring information.
+    This wrapper maintains backward compatibility with evaluate.py.
+
+    Args:
+        description: Job description text
+        company_name: Optional company name for blocklist check
+
+    Returns:
+        True if job qualifies, False otherwise
     """
-    config = get_config()
-
-    # Company blocklist check FIRST (before any description analysis)
-    if company_name:
-        company_lower = company_name.lower()
-        company_blocklist = config.get("company_blocklist", [])
-        for blocked in company_blocklist:
-            if blocked in company_lower:
-                return False
-
-    if not description or pd.isna(description):
-        return False
-
-    desc_lower = description.lower()
-
-    # Must have solar/PV context
-    required_context = config.get("required_context", {}).get("patterns", ["solar", "pv", "photovoltaic"])
-    has_solar_context = any(ctx in desc_lower for ctx in required_context)
-
-    if not has_solar_context:
-        return False
-
-    # Check all exclusion categories
-    exclusions = config.get("exclusions", {})
-    for category, excl_config in exclusions.items():
-        patterns = excl_config.get("patterns", [])
-        if any(pattern in desc_lower for pattern in patterns):
-            return False
-
-    # Get positive signals config
-    positive_signals = config.get("positive_signals", {})
-    design_role_indicators = config.get("design_role_indicators", [])
-
-    # TIER 1: Solar-specific design software (auto-qualify)
-    tier1 = positive_signals.get("tier1_tools", {})
-    tier1_patterns = tier1.get("patterns", [])
-    if any(tool in desc_lower for tool in tier1_patterns):
-        return True
-
-    # TIER 2: Strong technical signals that are specific to solar CAD work
-    tier2 = positive_signals.get("tier2_strong", {})
-    tier2_patterns = tier2.get("patterns", [])
-    has_strong_signal = any(sig in desc_lower for sig in tier2_patterns)
-    has_design_role = any(role in desc_lower for role in design_role_indicators)
-
-    if has_strong_signal and has_design_role:
-        return True
-
-    # TIER 3: General CAD tools + design role + solar project type
-    tier3 = positive_signals.get("tier3_cad_project", {})
-    tier3_cad = tier3.get("patterns_cad", [])
-    tier3_project = tier3.get("patterns_project", [])
-    has_cad_tool = any(tool in desc_lower for tool in tier3_cad)
-    has_solar_project = any(proj in desc_lower for proj in tier3_project)
-
-    if has_cad_tool and has_design_role and has_solar_project:
-        return True
-
-    # TIER 4: Job title contains explicit solar design role
-    tier4 = positive_signals.get("tier4_title", {})
-    tier4_patterns = tier4.get("patterns", [])
-    # Check first 200 chars (usually contains title)
-    title_area = desc_lower[:200]
-    if any(sig in title_area for sig in tier4_patterns):
-        return True
-
-    # TIER 5: Design role + CAD tool + solar/PV mentioned
-    tier5 = positive_signals.get("tier5_cad_design", {})
-    tier5_cad = tier5.get("patterns_cad", [])
-    has_cad_tool_tier5 = any(tool in desc_lower for tool in tier5_cad)
-
-    if has_cad_tool_tier5 and has_design_role:
-        # Already passed the solar/PV check at the top
-        return True
-
-    # TIER 6: Design role titles with solar context
-    tier6 = positive_signals.get("tier6_design_titles", {})
-    tier6_patterns = tier6.get("patterns", [])
-    if any(title in desc_lower for title in tier6_patterns):
-        return True
-
-    return False
+    result = score_job(description, company_name)
+    return result.qualified
 
 
 def scrape_solar_jobs() -> pd.DataFrame:
