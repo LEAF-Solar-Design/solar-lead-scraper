@@ -610,6 +610,35 @@ def process_jobs(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def print_filter_stats(stats: FilterStats) -> None:
+    """Print human-readable filter statistics."""
+    print()
+    print("=" * 50)
+    print("FILTER STATISTICS")
+    print("=" * 50)
+    print(f"Total processed:  {stats.total_processed}")
+    if stats.total_processed > 0:
+        print(f"Qualified:        {stats.total_qualified} ({stats.pass_rate:.1f}%)")
+        print(f"Rejected:         {stats.total_rejected} ({100 - stats.pass_rate:.1f}%)")
+    else:
+        print("Qualified:        0")
+        print("Rejected:         0")
+
+    if stats.company_blocked > 0:
+        print(f"\nCompany blocklist: {stats.company_blocked}")
+
+    if stats.rejection_categories:
+        print("\nTop rejection reasons:")
+        for category, count in stats.rejection_categories.most_common(5):
+            print(f"  {count:4d} | {category}")
+
+    if stats.qualification_tiers:
+        print("\nQualification by tier:")
+        for tier, count in sorted(stats.qualification_tiers.items()):
+            print(f"  {tier}: {count}")
+    print("=" * 50)
+
+
 def main():
     print("=" * 50)
     print("Solar Job Lead Scraper")
@@ -617,7 +646,10 @@ def main():
     print()
 
     # Scrape jobs
-    raw_jobs = scrape_solar_jobs()
+    raw_jobs, stats = scrape_solar_jobs()
+
+    # Print filter statistics
+    print_filter_stats(stats)
 
     if raw_jobs.empty:
         print("No jobs to process. Exiting.")
