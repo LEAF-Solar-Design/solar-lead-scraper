@@ -127,6 +127,18 @@ def description_matches(description: str, company_name: str = None) -> bool:
     if any(term in desc_lower for term in semiconductor_terms):
         return False
 
+    # Exclude EDA/chip design tools (semiconductor CAD, not solar CAD)
+    # Added in Phase 2 - these are chip design tools, not solar design tools
+    eda_tools = [
+        'cadence', 'synopsys', 'mentor graphics', 'siemens eda',
+        'virtuoso', 'spectre', 'innovus', 'genus', 'conformal',
+        'calibre', 'questa', 'modelsim', 'vcs', 'verdi',
+        'primetime', 'icc2', 'design compiler', 'dc shell',
+        'spyglass', 'formality', 'encounter', 'ic compiler'
+    ]
+    if any(tool in desc_lower for tool in eda_tools):
+        return False
+
     # Exclude field/installation roles (we want designers, not installers)
     installer_terms = [
         'installer', 'installation technician', 'roof lead', 'rooftop',
