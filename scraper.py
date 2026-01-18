@@ -12,6 +12,22 @@ import pandas as pd
 from jobspy import scrape_jobs
 
 
+# Company blocklist - known false positive industries
+# Aerospace/defense companies use "solar" for spacecraft solar panels
+# Semiconductor companies use "CAD" for chip design tools
+COMPANY_BLOCKLIST = {
+    # Aerospace/Defense
+    'boeing', 'northrop grumman', 'lockheed', 'lockheed martin',
+    'raytheon', 'spacex', 'blue origin', 'general dynamics',
+    'bae systems', 'l3harris', 'leidos', 'huntington ingalls',
+    'rtx', 'rtx corporation', 'sierra nevada corporation',
+    # Semiconductor
+    'intel', 'nvidia', 'amd', 'qualcomm', 'broadcom',
+    'texas instruments', 'micron', 'applied materials',
+    'lam research', 'kla', 'asml', 'marvell', 'microchip',
+}
+
+
 def generate_linkedin_search_url(company_name: str, job_title: str = None) -> str:
     """Generate a Google search URL for LinkedIn profiles at a company."""
     clean_name = clean_company_name(company_name)
@@ -68,8 +84,15 @@ def guess_domain(company_name: str) -> str:
     return f"{simple}.com"
 
 
-def description_matches(description: str) -> bool:
+def description_matches(description: str, company_name: str = None) -> bool:
     """Check if job description matches our criteria for solar design roles."""
+    # Company blocklist check FIRST (before any description analysis)
+    if company_name:
+        company_lower = company_name.lower()
+        for blocked in COMPANY_BLOCKLIST:
+            if blocked in company_lower:
+                return False
+
     if not description or pd.isna(description):
         return False
 
@@ -323,7 +346,7 @@ def scrape_solar_jobs() -> pd.DataFrame:
     # Filter by description content
     if 'description' in df.columns:
         before_filter = len(df)
-        df = df[df['description'].apply(description_matches)]
+        df = df[df.apply(lambda row: description_matches(row['description'], row.get('company')), axis=1)]
         print(f"After filtering: {len(df)} qualified leads (filtered out {before_filter - len(df)})")
     else:
         print("Warning: No description column available for filtering")
