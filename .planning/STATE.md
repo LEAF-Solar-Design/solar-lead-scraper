@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-18)
 
 **Core value:** Surface high-quality leads by finding companies actively hiring for solar design roles
-**Current focus:** Phase 3 - Architecture Refactoring (in progress)
+**Current focus:** Phase 4 - Quality (next)
 
 ## Current Position
 
 Phase: 3 of 4 (Architecture Refactoring)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-01-18 - Completed 03-02-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-01-18 - Completed 03-03-PLAN.md
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 3.6 min
-- Total execution time: 25 min
+- Total execution time: 29 min
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [██████░░░░] 60%
 |-------|-------|-------|----------|
 | 1. Metrics Foundation | 2/2 | 6 min | 3 min |
 | 2. Data-Driven Rules | 3/3 | 11 min | 3.67 min |
-| 3. Architecture | 2/3 | 8 min | 4 min |
+| 3. Architecture | 3/3 | 12 min | 4 min |
 | 4. Quality | 0/2 | - | - |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (4 min), 02-03 (4 min), 03-01 (4 min), 03-02 (4 min)
+- Last 5 plans: 02-03 (4 min), 03-01 (4 min), 03-02 (4 min), 03-03 (4 min)
 - Trend: Consistent (~4 min per plan)
 
 ## Accumulated Context
@@ -61,6 +61,9 @@ Recent decisions affecting current work:
 - ScoringResult dataclass over dict/tuple for type safety (03-02)
 - Score -100 for hard disqualifications vs 0 for neutral (03-02)
 - Backward-compatible wrapper maintains API stability (03-02)
+- Company and role scoring as separate functions for independent tuning (03-03)
+- ScoringResult tracks company_score and role_score for debugging visibility (03-03)
+- score_job() is thin orchestrator delegating to specialized functions (03-03)
 
 ### Pending Todos
 
@@ -75,7 +78,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 03-02-PLAN.md
+Stopped at: Completed 03-03-PLAN.md (Phase 3 complete)
 Resume file: None
 
 ## Completed Phases
@@ -141,7 +144,24 @@ Resume file: None
 **Commits:** 32d8be5, a3277b9
 **Completed:** 2026-01-18
 
-### Phase 3: Architecture Refactoring (in progress)
+### Phase 3: Architecture Refactoring (complete)
+
+**Summary:** Externalized filter configuration to JSON, converted boolean filter to weighted scoring system, separated company and role classification. All ARCH requirements satisfied.
+
+**Deliverables:**
+- `config/filter-config.json` - External filter configuration
+- `ScoringResult` dataclass with score, qualified, reasons, company_score, role_score
+- `score_job()`, `score_company()`, `score_role()` functions
+- `description_matches()` as backward-compatible wrapper
+
+**ARCH Requirements:**
+- ARCH-01: Filter terms editable via JSON without code changes
+- ARCH-02: Tiered boolean filter converted to weighted scoring
+- ARCH-03: Company classification separated from role classification
+- ARCH-04: Filter returns score + reasons (via ScoringResult)
+
+**Final Metrics:** 100% precision, 75% recall, F1 85.71% (no regressions)
+**Completed:** 2026-01-18
 
 #### Plan 03-01: Externalize Filter Configuration (complete)
 
@@ -168,12 +188,26 @@ Resume file: None
 **Commits:** 95bfa70, be5faf4, 63bdf55
 **Completed:** 2026-01-18
 
+#### Plan 03-03: Separate Company and Role Classification (complete)
+
+**Deliverables:**
+- `ScoringResult` extended with `company_score` and `role_score` fields
+- `score_company()` function for company-level classification (blocklist)
+- `score_role()` function for role/description classification (tiers 1-6)
+- `score_job()` refactored to thin orchestrator
+
+**Results:** 100% precision, 75% recall maintained (no regressions)
+**ARCH-03 satisfied:** Company classification separated from role classification
+**Commits:** 993073a
+**Completed:** 2026-01-18
+
 ## Next Steps
 
-**Remaining Phase 3 Plans:**
-- 03-03: Improve title signal detection
+**Phase 4 Plans:**
+- 04-01: Recall improvement (title signal detection, CAD design roles)
+- 04-02: Final validation and documentation
 
 **Outstanding Issues:**
-- 4 false negatives need title signal improvements
+- 4 false negatives in tier4/tier5 remain (title signal detection issue)
 - Can now debug with score_job() reasons to understand scoring gaps
 - Consider expanding title detection area beyond first 200 chars
