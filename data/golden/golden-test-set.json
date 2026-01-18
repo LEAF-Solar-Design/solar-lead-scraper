@@ -236,6 +236,22 @@
       "label": false,
       "category": "false_positive_utility",
       "notes": "Tests substation engineer exclusion - solar interconnection but substation focus"
+    },
+    {
+      "id": "golden_neg_blocked_company_01",
+      "description": "Solar Designer at aerospace company. Join our team designing solar array systems for satellites. You will use AutoCAD and create design documents for photovoltaic systems in space applications. Solar energy experience preferred.",
+      "company": "Boeing",
+      "label": false,
+      "category": "false_positive_blocked_company",
+      "notes": "Tests company blocklist - Boeing should be blocked even with solar designer title"
+    },
+    {
+      "id": "golden_neg_blocked_company_02",
+      "description": "CAD Designer for power systems at semiconductor fab. Design CAD layouts for power distribution in solar cell manufacturing equipment. AutoCAD proficiency required.",
+      "company": "Intel Corporation",
+      "label": false,
+      "category": "false_positive_blocked_company",
+      "notes": "Tests company blocklist - Intel should be blocked despite CAD and solar mentions"
     }
   ]
 }
