@@ -77,6 +77,140 @@ def get_config() -> dict:
     return _CONFIG
 
 
+def score_job(description: str, company_name: str = None, config: dict = None) -> ScoringResult:
+    """Score a job posting and return detailed results.
+
+    Args:
+        description: Job description text
+        company_name: Optional company name for blocklist check
+        config: Optional config dict (uses get_config() if not provided)
+
+    Returns:
+        ScoringResult with score, qualified flag, and reasons list
+    """
+    if config is None:
+        config = get_config()
+
+    threshold = config.get("threshold", 50.0)
+    reasons = []
+    score = 0.0
+
+    # Company blocklist check FIRST (immediate disqualification)
+    if company_name:
+        company_lower = company_name.lower()
+        for blocked in config["company_blocklist"]:
+            if blocked in company_lower:
+                return ScoringResult(
+                    score=-100.0,
+                    qualified=False,
+                    reasons=[f"Company '{company_name}' in blocklist ({blocked})"],
+                    threshold=threshold
+                )
+
+    # No description = cannot qualify
+    if not description or pd.isna(description):
+        return ScoringResult(
+            score=0.0,
+            qualified=False,
+            reasons=["No description provided"],
+            threshold=threshold
+        )
+
+    desc_lower = description.lower()
+
+    # Required context check (solar/PV)
+    required = config["required_context"]["patterns"]
+    has_required = any(p in desc_lower for p in required)
+    if not has_required:
+        return ScoringResult(
+            score=0.0,
+            qualified=False,
+            reasons=["Missing required solar/PV context"],
+            threshold=threshold
+        )
+    reasons.append("+0: Has solar/PV context (required)")
+
+    # Check all exclusions (any match = immediate -100)
+    for name, excl in config["exclusions"].items():
+        for pattern in excl["patterns"]:
+            if pattern in desc_lower:
+                return ScoringResult(
+                    score=-100.0,
+                    qualified=False,
+                    reasons=[f"Excluded: {excl['description']} (matched '{pattern}')"],
+                    threshold=threshold
+                )
+
+    # Check design role indicators (used by multiple tiers)
+    design_indicators = config["design_role_indicators"]
+    has_design_role = any(ind in desc_lower for ind in design_indicators)
+
+    # Score positive signals
+    signals = config["positive_signals"]
+
+    # Tier 1: Solar-specific tools (auto-qualify)
+    tier1 = signals["tier1_tools"]
+    for pattern in tier1["patterns"]:
+        if pattern in desc_lower:
+            score += tier1["weight"]
+            reasons.append(f"+{tier1['weight']}: {tier1['description']} ({pattern})")
+            break  # Only count once per tier
+
+    # Tier 2: Strong technical signals (require design role)
+    tier2 = signals["tier2_strong"]
+    if has_design_role:
+        for pattern in tier2["patterns"]:
+            if pattern in desc_lower:
+                score += tier2["weight"]
+                reasons.append(f"+{tier2['weight']}: {tier2['description']} ({pattern})")
+                break
+
+    # Tier 3: CAD + project type + design role
+    tier3 = signals["tier3_cad_project"]
+    if has_design_role:
+        has_cad = any(p in desc_lower for p in tier3["patterns_cad"])
+        has_project = any(p in desc_lower for p in tier3["patterns_project"])
+        if has_cad and has_project:
+            score += tier3["weight"]
+            reasons.append(f"+{tier3['weight']}: {tier3['description']}")
+
+    # Tier 4: Title signals (check first 200 chars)
+    tier4 = signals["tier4_title"]
+    title_area = desc_lower[:200]
+    for pattern in tier4["patterns"]:
+        if pattern in title_area:
+            score += tier4["weight"]
+            reasons.append(f"+{tier4['weight']}: {tier4['description']} ({pattern})")
+            break
+
+    # Tier 5: CAD + design role (simpler)
+    tier5 = signals["tier5_cad_design"]
+    if has_design_role:
+        has_cad = any(p in desc_lower for p in tier5["patterns_cad"])
+        if has_cad:
+            score += tier5["weight"]
+            reasons.append(f"+{tier5['weight']}: {tier5['description']}")
+
+    # Tier 6: Design role titles
+    tier6 = signals["tier6_design_titles"]
+    for pattern in tier6["patterns"]:
+        if pattern in desc_lower:
+            score += tier6["weight"]
+            reasons.append(f"+{tier6['weight']}: {tier6['description']} ({pattern})")
+            break
+
+    # Add design role indicator note
+    if has_design_role:
+        reasons.append("+0: Has design role indicator")
+
+    return ScoringResult(
+        score=score,
+        qualified=score >= threshold,
+        reasons=reasons,
+        threshold=threshold
+    )
+
+
 def generate_linkedin_search_url(company_name: str, job_title: str = None) -> str:
     """Generate a Google search URL for LinkedIn profiles at a company."""
     clean_name = clean_company_name(company_name)
