@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-18)
 
 **Core value:** Surface high-quality leads by finding companies actively hiring for solar design roles
-**Current focus:** Phase 3 - Architecture Refactoring (next up)
+**Current focus:** Phase 3 - Architecture Refactoring (in progress)
 
 ## Current Position
 
 Phase: 3 of 4 (Architecture Refactoring)
-Plan: 0 of 3 in current phase
-Status: Ready to discuss/plan Phase 3
-Last activity: 2026-01-18 - Phase 2 verified and complete
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-01-18 - Completed 03-01-PLAN.md
 
-Progress: [████░░░░░░] 40%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 3.4 min
-- Total execution time: 17 min
+- Total plans completed: 6
+- Average duration: 3.5 min
+- Total execution time: 21 min
 
 **By Phase:**
 
@@ -29,12 +29,12 @@ Progress: [████░░░░░░] 40%
 |-------|-------|-------|----------|
 | 1. Metrics Foundation | 2/2 | 6 min | 3 min |
 | 2. Data-Driven Rules | 3/3 | 11 min | 3.67 min |
-| 3. Architecture | 0/3 | - | - |
+| 3. Architecture | 1/3 | 4 min | 4 min |
 | 4. Quality | 0/2 | - | - |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (3 min), 02-01 (3 min), 02-02 (4 min), 02-03 (4 min)
-- Trend: Consistent (~3.5 min per plan)
+- Last 5 plans: 02-01 (3 min), 02-02 (4 min), 02-03 (4 min), 03-01 (4 min)
+- Trend: Consistent (~3.75 min per plan)
 
 ## Accumulated Context
 
@@ -56,6 +56,8 @@ Recent decisions affecting current work:
 - Stringer added to installer_terms (catches tennis and solar stringing labor) (02-02)
 - Phase 2 focused on precision defense, recall improvement deferred (02-03)
 - All exclusions verified with targeted test cases (02-03)
+- JSON for configuration over YAML - zero dependencies (03-01)
+- Lazy config loading with module-level caching (03-01)
 
 ### Pending Todos
 
@@ -70,7 +72,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Phase 2 execution complete, verified
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
 
 ## Completed Phases
@@ -136,14 +138,27 @@ Resume file: None
 **Commits:** 32d8be5, a3277b9
 **Completed:** 2026-01-18
 
-## Next Phase: Architecture Improvements
+### Phase 3: Architecture Refactoring (in progress)
 
-**Phase 3 Plans:**
-- 03-01: Refactor filter to scoring system
-- 03-02: Add confidence levels
+#### Plan 03-01: Externalize Filter Configuration (complete)
+
+**Deliverables:**
+- `config/filter-config.json` - External filter configuration (94 lines)
+- `load_filter_config()` and `get_config()` functions in scraper.py
+- `description_matches()` refactored to read terms from config
+
+**Results:** 100% precision, 75% recall maintained (no regressions)
+**ARCH-01 satisfied:** Filter terms editable via JSON without code changes
+**Commits:** ac6ac9e, d234ed5
+**Completed:** 2026-01-18
+
+## Next Steps
+
+**Remaining Phase 3 Plans:**
+- 03-02: Add confidence levels (weighted scoring)
 - 03-03: Improve title signal detection
 
-**Outstanding Issues for Phase 3:**
+**Outstanding Issues:**
 - 4 false negatives need title signal improvements
 - Consider expanding title detection area beyond first 200 chars
 - Pattern refinement for "Solar Designer" in varied formats
