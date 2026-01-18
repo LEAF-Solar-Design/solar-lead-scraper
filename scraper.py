@@ -6,6 +6,7 @@ Finds companies hiring for solar CAD/design roles to use as sales leads.
 import json
 import re
 import urllib.parse
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,47 @@ class ScoringResult:
     company_score: float = 0.0
     role_score: float = 0.0
     threshold: float = 50.0
+
+
+@dataclass
+class FilterStats:
+    """Statistics collected during a filter run.
+
+    Attributes:
+        total_processed: Total leads processed
+        total_qualified: Leads that passed filter
+        total_rejected: Leads that failed filter
+        rejection_categories: Counter of rejection reason categories
+        qualification_tiers: Counter of highest tier matched for qualifications
+        company_blocked: Count of company blocklist rejections
+    """
+    total_processed: int = 0
+    total_qualified: int = 0
+    total_rejected: int = 0
+    rejection_categories: Counter = field(default_factory=Counter)
+    qualification_tiers: Counter = field(default_factory=Counter)
+    company_blocked: int = 0
+
+    def add_qualified(self, tier: str) -> None:
+        """Record a qualified lead."""
+        self.total_processed += 1
+        self.total_qualified += 1
+        self.qualification_tiers[tier] += 1
+
+    def add_rejected(self, category: str, is_company_blocked: bool = False) -> None:
+        """Record a rejected lead."""
+        self.total_processed += 1
+        self.total_rejected += 1
+        self.rejection_categories[category] += 1
+        if is_company_blocked:
+            self.company_blocked += 1
+
+    @property
+    def pass_rate(self) -> float:
+        """Calculate pass rate as percentage."""
+        if self.total_processed == 0:
+            return 0.0
+        return self.total_qualified / self.total_processed * 100
 
 
 # Company blocklist - known false positive industries
