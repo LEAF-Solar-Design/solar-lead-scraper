@@ -6,11 +6,28 @@ Finds companies hiring for solar CAD/design roles to use as sales leads.
 import json
 import re
 import urllib.parse
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 from jobspy import scrape_jobs
+
+
+@dataclass
+class ScoringResult:
+    """Result of scoring a job posting.
+
+    Attributes:
+        score: Total numeric score (higher = better match)
+        qualified: Whether score meets threshold
+        reasons: List of human-readable scoring explanations
+        threshold: The threshold used for qualification
+    """
+    score: float
+    qualified: bool
+    reasons: list[str] = field(default_factory=list)
+    threshold: float = 50.0
 
 
 # Company blocklist - known false positive industries
