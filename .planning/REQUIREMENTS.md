@@ -9,10 +9,10 @@ Requirements for improving lead qualification precision from ~3% to >20%.
 
 ### Metrics & Baseline
 
-- [ ] **METR-01**: System tracks precision (qualified / total passed) per run
-- [ ] **METR-02**: System tracks recall (qualified found / qualified in source) via golden test set
-- [ ] **METR-03**: Labeled data files can be loaded for evaluation
-- [ ] **METR-04**: Evaluation script compares filter output against labeled data
+- [x] **METR-01**: System tracks precision (qualified / total passed) per run
+- [x] **METR-02**: System tracks recall (qualified found / qualified in source) via golden test set
+- [x] **METR-03**: Labeled data files can be loaded for evaluation
+- [x] **METR-04**: Evaluation script compares filter output against labeled data
 
 ### Data-Driven Rules
 
@@ -65,10 +65,10 @@ Deferred until 50+ qualified examples available.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| METR-01 | Phase 1 | Pending |
-| METR-02 | Phase 1 | Pending |
-| METR-03 | Phase 1 | Pending |
-| METR-04 | Phase 1 | Pending |
+| METR-01 | Phase 1 | Complete |
+| METR-02 | Phase 1 | Complete |
+| METR-03 | Phase 1 | Complete |
+| METR-04 | Phase 1 | Complete |
 | RULE-01 | Phase 2 | Pending |
 | RULE-02 | Phase 2 | Pending |
 | RULE-03 | Phase 2 | Pending |
@@ -88,4 +88,4 @@ Deferred until 50+ qualified examples available.
 
 ---
 *Requirements defined: 2026-01-18*
-*Last updated: 2026-01-18 after research synthesis*
+*Last updated: 2026-01-18 after Phase 1 completion*
