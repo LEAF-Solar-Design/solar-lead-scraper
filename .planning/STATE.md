@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-18)
 
 **Core value:** Surface high-quality leads by finding companies actively hiring for solar design roles
-**Current focus:** Phase 4 - Quality (next)
+**Current focus:** Phase 4 - Quality Instrumentation (in progress)
 
 ## Current Position
 
 Phase: 4 of 4 (Quality Instrumentation)
-Plan: 0 of 2 in current phase
-Status: Ready to plan Phase 4
-Last activity: 2026-01-18 - Phase 3 verified and complete
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-01-18 - Completed 04-01-PLAN.md
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 3.6 min
-- Total execution time: 29 min
+- Total plans completed: 9
+- Average duration: 3.5 min
+- Total execution time: 32 min
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [████████░░] 80%
 | 1. Metrics Foundation | 2/2 | 6 min | 3 min |
 | 2. Data-Driven Rules | 3/3 | 11 min | 3.67 min |
 | 3. Architecture | 3/3 | 12 min | 4 min |
-| 4. Quality | 0/2 | - | - |
+| 4. Quality | 1/2 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (4 min), 03-01 (4 min), 03-02 (4 min), 03-03 (4 min)
-- Trend: Consistent (~4 min per plan)
+- Last 5 plans: 03-01 (4 min), 03-02 (4 min), 03-03 (4 min), 04-01 (3 min)
+- Trend: Consistent (~3-4 min per plan)
 
 ## Accumulated Context
 
@@ -64,6 +64,8 @@ Recent decisions affecting current work:
 - Company and role scoring as separate functions for independent tuning (03-03)
 - ScoringResult tracks company_score and role_score for debugging visibility (03-03)
 - score_job() is thin orchestrator delegating to specialized functions (03-03)
+- Counter from collections for stats aggregation (04-01)
+- Categorize rejections to config section names for correlation (04-01)
 
 ### Pending Todos
 
@@ -78,7 +80,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Phase 3 verified and complete
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None
 
 ## Completed Phases
@@ -202,10 +204,27 @@ Resume file: None
 **Completed:** 2026-01-18
 **Verified:** 2026-01-18 (4/4 must-haves confirmed)
 
+### Phase 4: Quality Instrumentation (in progress)
+
+**Summary:** Adding per-rule statistics logging and quality instrumentation.
+
+#### Plan 04-01: Filter Statistics (complete)
+
+**Deliverables:**
+- `FilterStats` dataclass with Counter aggregation
+- `categorize_rejection()` and `extract_tier_from_reasons()` helpers
+- `scrape_solar_jobs()` returns (DataFrame, FilterStats) tuple
+- `print_filter_stats()` displays human-readable statistics
+- `main()` wires stats display after each run
+
+**Results:** 100% precision, 75% recall maintained (no regressions)
+**QUAL-01 satisfied:** Each run logs filter statistics
+**Commits:** 5919165, 23d5cc8, c46af01
+**Completed:** 2026-01-18
+
 ## Next Steps
 
-**Phase 4 Plans:**
-- 04-01: Recall improvement (title signal detection, CAD design roles)
+**Phase 4 Remaining:**
 - 04-02: Final validation and documentation
 
 **Outstanding Issues:**
