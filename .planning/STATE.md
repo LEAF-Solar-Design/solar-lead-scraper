@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-18)
 
 **Core value:** Surface high-quality leads by finding companies actively hiring for solar design roles
-**Current focus:** Phase 4 - Quality Instrumentation (in progress)
+**Current focus:** Phase 4 - Quality Instrumentation (COMPLETE)
 
 ## Current Position
 
 Phase: 4 of 4 (Quality Instrumentation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-01-18 - Completed 04-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-01-18 - Completed 04-02-PLAN.md
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 3.5 min
-- Total execution time: 32 min
+- Total execution time: 35 min
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [█████████░] 90%
 | 1. Metrics Foundation | 2/2 | 6 min | 3 min |
 | 2. Data-Driven Rules | 3/3 | 11 min | 3.67 min |
 | 3. Architecture | 3/3 | 12 min | 4 min |
-| 4. Quality | 1/2 | 3 min | 3 min |
+| 4. Quality | 2/2 | 6 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (4 min), 03-02 (4 min), 03-03 (4 min), 04-01 (3 min)
+- Last 5 plans: 03-02 (4 min), 03-03 (4 min), 04-01 (3 min), 04-02 (3 min)
 - Trend: Consistent (~3-4 min per plan)
 
 ## Accumulated Context
@@ -66,10 +66,13 @@ Recent decisions affecting current work:
 - score_job() is thin orchestrator delegating to specialized functions (03-03)
 - Counter from collections for stats aggregation (04-01)
 - Categorize rejections to config section names for correlation (04-01)
+- Confidence score capped at 100 (score 50=threshold, 100+=100%) (04-02)
+- Rejected leads export matches golden-test-set.json schema (04-02)
+- Default max_export=100 to avoid huge files (04-02)
 
 ### Pending Todos
 
-None yet.
+None - all planned work complete.
 
 ### Blockers/Concerns
 
@@ -80,7 +83,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 04-01-PLAN.md
+Stopped at: Completed 04-02-PLAN.md (Phase 4 complete)
 Resume file: None
 
 ## Completed Phases
@@ -204,9 +207,26 @@ Resume file: None
 **Completed:** 2026-01-18
 **Verified:** 2026-01-18 (4/4 must-haves confirmed)
 
-### Phase 4: Quality Instrumentation (in progress)
+### Phase 4: Quality Instrumentation (complete)
 
-**Summary:** Adding per-rule statistics logging and quality instrumentation.
+**Summary:** Added per-rule statistics logging, rejected lead export for labeling, and confidence scores in output. All QUAL requirements satisfied.
+
+**Deliverables:**
+- `FilterStats` dataclass with Counter aggregation
+- `categorize_rejection()` and `extract_tier_from_reasons()` helpers
+- `export_rejected_leads()` function producing JSON for labeling workflow
+- `scrape_solar_jobs()` returns (DataFrame, FilterStats, rejected_leads, scoring_results)
+- `process_jobs()` adds confidence_score column
+- `print_filter_stats()` displays human-readable statistics
+- `main()` wires stats display and rejected lead export
+
+**QUAL Requirements:**
+- QUAL-01: Each run logs filter statistics
+- QUAL-02: Rejected leads can be exported for labeling
+- QUAL-03: Qualified leads include confidence score
+
+**Final Metrics:** 100% precision, 75% recall, F1 85.71% (no regressions)
+**Completed:** 2026-01-18
 
 #### Plan 04-01: Filter Statistics (complete)
 
@@ -222,12 +242,38 @@ Resume file: None
 **Commits:** 5919165, 23d5cc8, c46af01
 **Completed:** 2026-01-18
 
-## Next Steps
+#### Plan 04-02: Rejected Lead Export and Confidence Scores (complete)
 
-**Phase 4 Remaining:**
-- 04-02: Final validation and documentation
+**Deliverables:**
+- `export_rejected_leads()` function exporting JSON matching golden-test-set.json schema
+- `scrape_solar_jobs()` returns 4-tuple including rejected_leads and scoring_results
+- `process_jobs()` accepts scoring_results and adds confidence_score column
+- `main()` exports rejected leads and passes scoring to process_jobs
 
-**Outstanding Issues:**
+**Results:** 100% precision, 75% recall maintained (no regressions)
+**QUAL-02 satisfied:** Rejected leads can be exported for labeling
+**QUAL-03 satisfied:** Qualified leads include confidence score
+**Commits:** eecab7d, 8c5fd76, 33a6df7
+**Completed:** 2026-01-18
+
+## Project Complete
+
+All 4 phases complete. All requirements satisfied:
+
+| Phase | Requirements | Status |
+|-------|--------------|--------|
+| 1. Metrics Foundation | METRIC-01, METRIC-02, METRIC-03 | DONE |
+| 2. Data-Driven Rules | RULE-01, RULE-02, RULE-03, RULE-04 | DONE |
+| 3. Architecture | ARCH-01, ARCH-02, ARCH-03, ARCH-04 | DONE |
+| 4. Quality Instrumentation | QUAL-01, QUAL-02, QUAL-03 | DONE |
+
+**Final Metrics:**
+- Precision: 100%
+- Recall: 75%
+- F1 Score: 85.71%
+- Golden test set: 41 items (16 positive, 25 negative)
+
+**Outstanding Issues for Future Work:**
 - 4 false negatives in tier4/tier5 remain (title signal detection issue)
-- Can now debug with score_job() reasons to understand scoring gaps
 - Consider expanding title detection area beyond first 200 chars
+- Class imbalance: Only 16 qualified examples - need more positives for ML
