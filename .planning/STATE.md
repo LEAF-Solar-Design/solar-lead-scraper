@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-18)
 ## Current Position
 
 Phase: 3 of 4 (Architecture Refactoring)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-01-18 - Completed 03-01-PLAN.md
+Last activity: 2026-01-18 - Completed 03-02-PLAN.md
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 3.5 min
-- Total execution time: 21 min
+- Total plans completed: 7
+- Average duration: 3.6 min
+- Total execution time: 25 min
 
 **By Phase:**
 
@@ -29,12 +29,12 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 1. Metrics Foundation | 2/2 | 6 min | 3 min |
 | 2. Data-Driven Rules | 3/3 | 11 min | 3.67 min |
-| 3. Architecture | 1/3 | 4 min | 4 min |
+| 3. Architecture | 2/3 | 8 min | 4 min |
 | 4. Quality | 0/2 | - | - |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (3 min), 02-02 (4 min), 02-03 (4 min), 03-01 (4 min)
-- Trend: Consistent (~3.75 min per plan)
+- Last 5 plans: 02-02 (4 min), 02-03 (4 min), 03-01 (4 min), 03-02 (4 min)
+- Trend: Consistent (~4 min per plan)
 
 ## Accumulated Context
 
@@ -58,6 +58,9 @@ Recent decisions affecting current work:
 - All exclusions verified with targeted test cases (02-03)
 - JSON for configuration over YAML - zero dependencies (03-01)
 - Lazy config loading with module-level caching (03-01)
+- ScoringResult dataclass over dict/tuple for type safety (03-02)
+- Score -100 for hard disqualifications vs 0 for neutral (03-02)
+- Backward-compatible wrapper maintains API stability (03-02)
 
 ### Pending Todos
 
@@ -72,7 +75,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 03-01-PLAN.md
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
 
 ## Completed Phases
@@ -152,13 +155,25 @@ Resume file: None
 **Commits:** ac6ac9e, d234ed5
 **Completed:** 2026-01-18
 
+#### Plan 03-02: Weighted Scoring System (complete)
+
+**Deliverables:**
+- `ScoringResult` dataclass with score, qualified, reasons, threshold fields
+- `score_job()` function implementing weighted scoring (134 lines)
+- `description_matches()` refactored to thin wrapper (87 lines -> 2 lines)
+
+**Results:** 100% precision, 75% recall maintained (no regressions)
+**ARCH-02 satisfied:** Tiered boolean filter converted to weighted scoring
+**ARCH-04 satisfied:** Filter returns score + reasons (via ScoringResult)
+**Commits:** 95bfa70, be5faf4, 63bdf55
+**Completed:** 2026-01-18
+
 ## Next Steps
 
 **Remaining Phase 3 Plans:**
-- 03-02: Add confidence levels (weighted scoring)
 - 03-03: Improve title signal detection
 
 **Outstanding Issues:**
 - 4 false negatives need title signal improvements
+- Can now debug with score_job() reasons to understand scoring gaps
 - Consider expanding title detection area beyond first 200 chars
-- Pattern refinement for "Solar Designer" in varied formats
