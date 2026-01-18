@@ -110,7 +110,13 @@ def description_matches(description: str) -> bool:
         'journeyman electrician', 'apprentice electrician', 'lineman', 'lineworker',
         'o&m technician', 'field technician', 'service technician',
         'field service', 'commissioning technician', 'maintenance technician',
-        'solar technician', 'pv technician', 'array supervisor'
+        'solar technician', 'pv technician', 'array supervisor',
+        # Added in Phase 2 - installer false positives
+        'stringer',           # Tennis/racquet AND solar stringing labor
+        'roofer',             # Roofing labor, not design
+        'foreman',            # Construction supervision
+        'crew lead',          # Installation crew supervision
+        'panel installer',    # Explicit installer role
     ]
     if any(term in desc_lower for term in installer_terms):
         return False
