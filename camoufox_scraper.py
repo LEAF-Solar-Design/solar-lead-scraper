@@ -40,6 +40,85 @@ class BrowserSearchError:
         }
 
 
+async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
+    """
+    Attempt to solve Cloudflare Turnstile challenge by clicking the checkbox.
+
+    The technique locates the Cloudflare challenge iframe and clicks the checkbox
+    at calculated coordinates within the frame.
+
+    Args:
+        page: Playwright page object
+        max_attempts: Maximum number of click attempts
+
+    Returns:
+        True if challenge was solved, False otherwise
+    """
+    for attempt in range(max_attempts):
+        # Wait for potential iframe to load
+        await page.wait_for_timeout(2000)
+
+        # Check if we're on a Cloudflare challenge page
+        content = await page.content()
+        if "challenge" not in content.lower() and "turnstile" not in content.lower():
+            # No challenge present, we're good
+            return True
+
+        # Look for Cloudflare challenge iframe
+        frames = page.frames
+        challenge_frame = None
+
+        for frame in frames:
+            frame_url = frame.url
+            if "challenges.cloudflare.com" in frame_url:
+                challenge_frame = frame
+                break
+
+        if not challenge_frame:
+            # No challenge iframe found - might be a different type of challenge
+            print(f"    [turnstile] Attempt {attempt + 1}: No challenge iframe found")
+            await page.wait_for_timeout(1000)
+            continue
+
+        try:
+            # Find the iframe element to get its bounding box
+            iframe_element = await page.query_selector('iframe[src*="challenges.cloudflare.com"]')
+            if not iframe_element:
+                print(f"    [turnstile] Attempt {attempt + 1}: Could not find iframe element")
+                continue
+
+            # Get bounding box of the iframe
+            box = await iframe_element.bounding_box()
+            if not box:
+                print(f"    [turnstile] Attempt {attempt + 1}: Could not get iframe bounding box")
+                continue
+
+            # Calculate checkbox position (approximately 1/9 from left, middle vertically)
+            # The checkbox is typically in the left portion of the Turnstile widget
+            click_x = box['x'] + (box['width'] / 9)
+            click_y = box['y'] + (box['height'] / 2)
+
+            print(f"    [turnstile] Attempt {attempt + 1}: Clicking at ({click_x:.0f}, {click_y:.0f})")
+
+            # Click with human-like delay
+            await page.mouse.click(click_x, click_y)
+
+            # Wait for challenge to process
+            await page.wait_for_timeout(3000)
+
+            # Check if challenge was solved (page should redirect or content should change)
+            new_content = await page.content()
+            if "challenge" not in new_content.lower() or "success" in new_content.lower():
+                print(f"    [turnstile] Challenge solved on attempt {attempt + 1}")
+                return True
+
+        except Exception as e:
+            print(f"    [turnstile] Attempt {attempt + 1} error: {str(e)[:100]}")
+
+    print(f"    [turnstile] Failed to solve challenge after {max_attempts} attempts")
+    return False
+
+
 async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "USA", debug_dir: str = None) -> list[dict]:
     """Scrape a single search from ZipRecruiter."""
     jobs = []
@@ -52,8 +131,28 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
         page = await browser.new_page()
         await page.goto(search_url, wait_until="domcontentloaded")
 
-        # Wait for page to load and Cloudflare challenge to resolve
-        await page.wait_for_timeout(5000)
+        # Wait for initial page load
+        await page.wait_for_timeout(3000)
+
+        # Check for and attempt to solve Cloudflare Turnstile challenge
+        content = await page.content()
+        if "challenge" in content.lower() or "verify" in content.lower():
+            print(f"  [ziprecruiter] Cloudflare challenge detected, attempting to solve...")
+            solved = await solve_cloudflare_turnstile(page)
+            if solved:
+                # Wait for redirect after solving
+                await page.wait_for_timeout(3000)
+            else:
+                # Save screenshot of failed challenge
+                if debug_dir:
+                    safe_term = search_term.replace(' ', '_')[:20]
+                    screenshot_path = f"{debug_dir}/ziprecruiter_{safe_term}_challenge.png"
+                    try:
+                        await page.screenshot(path=screenshot_path, full_page=True)
+                    except Exception:
+                        pass
+                print(f"  [ziprecruiter] Could not solve Cloudflare challenge for '{search_term}'")
+                return jobs
 
         # Wait for job cards to appear
         try:
@@ -139,8 +238,28 @@ async def scrape_glassdoor_page(browser, search_term: str, location: str = "Unit
         page = await browser.new_page()
         await page.goto(search_url, wait_until="domcontentloaded")
 
-        # Wait for page to load and Cloudflare challenge to resolve
-        await page.wait_for_timeout(5000)
+        # Wait for initial page load
+        await page.wait_for_timeout(3000)
+
+        # Check for and attempt to solve Cloudflare Turnstile challenge
+        content = await page.content()
+        if "challenge" in content.lower() or "verify" in content.lower():
+            print(f"  [glassdoor] Cloudflare challenge detected, attempting to solve...")
+            solved = await solve_cloudflare_turnstile(page)
+            if solved:
+                # Wait for redirect after solving
+                await page.wait_for_timeout(3000)
+            else:
+                # Save screenshot of failed challenge
+                if debug_dir:
+                    safe_term = search_term.replace(' ', '_')[:20]
+                    screenshot_path = f"{debug_dir}/glassdoor_{safe_term}_challenge.png"
+                    try:
+                        await page.screenshot(path=screenshot_path, full_page=True)
+                    except Exception:
+                        pass
+                print(f"  [glassdoor] Could not solve Cloudflare challenge for '{search_term}'")
+                return jobs
 
         # Wait for job listings to appear
         try:
@@ -260,9 +379,10 @@ async def scrape_with_camoufox(
         async with AsyncCamoufox(
             headless=headless_mode,
             humanize=True,  # Human-like mouse movements
-            block_images=True,  # Faster loading
+            block_images=False,  # Need images for Turnstile challenge
             block_webrtc=True,  # Privacy
             os="windows" if not is_linux else None,  # Spoof Windows on Linux
+            disable_coop=True,  # Allow clicking inside cross-origin iframes (for Turnstile)
         ) as browser:
             print("[Camoufox] Browser started successfully")
 
