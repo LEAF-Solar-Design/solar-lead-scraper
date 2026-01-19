@@ -40,7 +40,7 @@ class BrowserSearchError:
         }
 
 
-async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "USA") -> list[dict]:
+async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "USA", debug_dir: str = None) -> list[dict]:
     """Scrape a single search from ZipRecruiter."""
     jobs = []
     page = None
@@ -59,8 +59,31 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
         try:
             await page.wait_for_selector('article.job_result', timeout=15000)
         except Exception:
-            # No results found or page structure changed
-            print(f"  [ziprecruiter] No job cards found for '{search_term}'")
+            # Debug: capture page title and check for Cloudflare
+            try:
+                title = await page.title()
+                url = page.url
+                # Check for Cloudflare challenge indicators
+                content = await page.content()
+
+                # Save debug screenshot if debug_dir provided
+                if debug_dir:
+                    safe_term = search_term.replace(' ', '_')[:20]
+                    screenshot_path = f"{debug_dir}/ziprecruiter_{safe_term}.png"
+                    try:
+                        await page.screenshot(path=screenshot_path, full_page=True)
+                        print(f"  [ziprecruiter] Saved debug screenshot: {screenshot_path}")
+                    except Exception as e:
+                        print(f"  [ziprecruiter] Failed to save screenshot: {e}")
+
+                if "challenge" in content.lower() or "cloudflare" in content.lower():
+                    print(f"  [ziprecruiter] Cloudflare challenge detected for '{search_term}'")
+                elif "captcha" in content.lower():
+                    print(f"  [ziprecruiter] CAPTCHA detected for '{search_term}'")
+                else:
+                    print(f"  [ziprecruiter] No job cards found for '{search_term}' (title: {title[:50]})")
+            except Exception:
+                print(f"  [ziprecruiter] No job cards found for '{search_term}'")
             return jobs
 
         # Get job cards using Playwright locators
@@ -104,7 +127,7 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
     return jobs
 
 
-async def scrape_glassdoor_page(browser, search_term: str, location: str = "United States") -> list[dict]:
+async def scrape_glassdoor_page(browser, search_term: str, location: str = "United States", debug_dir: str = None) -> list[dict]:
     """Scrape a single search from Glassdoor."""
     jobs = []
     page = None
@@ -123,7 +146,29 @@ async def scrape_glassdoor_page(browser, search_term: str, location: str = "Unit
         try:
             await page.wait_for_selector('[data-test="jobListing"]', timeout=15000)
         except Exception:
-            print(f"  [glassdoor] No job listings found for '{search_term}'")
+            # Debug: capture page title and check for Cloudflare
+            try:
+                title = await page.title()
+                content = await page.content()
+
+                # Save debug screenshot if debug_dir provided
+                if debug_dir:
+                    safe_term = search_term.replace(' ', '_')[:20]
+                    screenshot_path = f"{debug_dir}/glassdoor_{safe_term}.png"
+                    try:
+                        await page.screenshot(path=screenshot_path, full_page=True)
+                        print(f"  [glassdoor] Saved debug screenshot: {screenshot_path}")
+                    except Exception as e:
+                        print(f"  [glassdoor] Failed to save screenshot: {e}")
+
+                if "challenge" in content.lower() or "cloudflare" in content.lower():
+                    print(f"  [glassdoor] Cloudflare challenge detected for '{search_term}'")
+                elif "captcha" in content.lower():
+                    print(f"  [glassdoor] CAPTCHA detected for '{search_term}'")
+                else:
+                    print(f"  [glassdoor] No job listings found for '{search_term}' (title: {title[:50]})")
+            except Exception:
+                print(f"  [glassdoor] No job listings found for '{search_term}'")
             return jobs
 
         # Get job cards
@@ -169,7 +214,8 @@ async def scrape_glassdoor_page(browser, search_term: str, location: str = "Unit
 
 async def scrape_with_camoufox(
     search_terms: list[str],
-    sites: list[str] = None
+    sites: list[str] = None,
+    debug_screenshots: bool = False
 ) -> tuple[pd.DataFrame, list[BrowserSearchError]]:
     """
     Scrape Cloudflare-protected job sites using Camoufox browser.
@@ -177,6 +223,7 @@ async def scrape_with_camoufox(
     Args:
         search_terms: List of job search terms
         sites: Which sites to scrape ('ziprecruiter', 'glassdoor'). Default: both.
+        debug_screenshots: If True, save screenshots when no results found (for CI debugging)
 
     Returns:
         Tuple of (DataFrame of jobs, list of errors)
@@ -190,6 +237,13 @@ async def scrape_with_camoufox(
 
     all_jobs = []
     errors = []
+
+    # Set up debug directory if screenshots enabled
+    debug_dir = None
+    if debug_screenshots:
+        debug_dir = "output/debug_screenshots"
+        os.makedirs(debug_dir, exist_ok=True)
+        print(f"[Camoufox] Debug screenshots will be saved to: {debug_dir}")
 
     print(f"\n--- Camoufox Browser Scraping ({', '.join(sites)}) ---")
     print("Starting Camoufox browser (this may take a moment)...")
@@ -218,7 +272,7 @@ async def scrape_with_camoufox(
                 # Scrape ZipRecruiter
                 if 'ziprecruiter' in sites:
                     try:
-                        jobs = await scrape_ziprecruiter_page(browser, term)
+                        jobs = await scrape_ziprecruiter_page(browser, term, debug_dir=debug_dir)
                         if jobs:
                             all_jobs.extend(jobs)
                             print(f"  [ziprecruiter] Found {len(jobs)} jobs")
@@ -241,7 +295,7 @@ async def scrape_with_camoufox(
                 # Scrape Glassdoor
                 if 'glassdoor' in sites:
                     try:
-                        jobs = await scrape_glassdoor_page(browser, term)
+                        jobs = await scrape_glassdoor_page(browser, term, debug_dir=debug_dir)
                         if jobs:
                             all_jobs.extend(jobs)
                             print(f"  [glassdoor] Found {len(jobs)} jobs")
@@ -282,13 +336,15 @@ async def scrape_with_camoufox(
     return pd.DataFrame(), errors
 
 
-def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None) -> tuple[pd.DataFrame, list[dict]]:
+def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None, debug_screenshots: bool = None) -> tuple[pd.DataFrame, list[dict]]:
     """
     Synchronous wrapper for the async Camoufox scraper.
 
     Args:
         search_terms: List of job search terms
         sites: Which sites to scrape
+        debug_screenshots: If True, save screenshots when no results found.
+                          If None, auto-detect from CAMOUFOX_DEBUG env var.
 
     Returns:
         Tuple of (DataFrame of jobs, list of error dicts)
@@ -297,8 +353,12 @@ def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None) -> tu
         print("[Camoufox] camoufox not available - install with: pip install camoufox && camoufox fetch")
         return pd.DataFrame(), []
 
+    # Auto-detect debug mode from environment if not specified
+    if debug_screenshots is None:
+        debug_screenshots = os.environ.get("CAMOUFOX_DEBUG", "0") == "1"
+
     try:
-        df, errors = asyncio.run(scrape_with_camoufox(search_terms, sites))
+        df, errors = asyncio.run(scrape_with_camoufox(search_terms, sites, debug_screenshots=debug_screenshots))
         return df, [e.to_dict() for e in errors]
     except Exception as e:
         print(f"[Camoufox] Error running scraper: {str(e)[:200]}")
@@ -311,10 +371,88 @@ def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None) -> tu
         }]
 
 
+async def debug_single_search():
+    """Debug mode: scrape a single search and save screenshots."""
+    if not CAMOUFOX_AVAILABLE:
+        print("Camoufox not installed")
+        return
+
+    import os
+    os.makedirs("debug_screenshots", exist_ok=True)
+
+    print("Starting debug scrape...")
+
+    async with AsyncCamoufox(
+        headless=True,  # Use true headless for local testing
+        humanize=True,
+    ) as browser:
+        # Test ZipRecruiter
+        print("\n--- Testing ZipRecruiter ---")
+        page = await browser.new_page()
+        await page.goto("https://www.ziprecruiter.com/jobs-search?search=solar+designer&location=USA")
+        await page.wait_for_timeout(8000)  # Wait longer
+
+        title = await page.title()
+        print(f"Page title: {title}")
+
+        await page.screenshot(path="debug_screenshots/ziprecruiter.png", full_page=True)
+        print("Saved screenshot to debug_screenshots/ziprecruiter.png")
+
+        # Check for various selectors
+        selectors_to_try = [
+            'article.job_result',
+            '.job_result',
+            '[data-job-id]',
+            '.jobList',
+            '.job-listing',
+            '.job_content',
+        ]
+        for sel in selectors_to_try:
+            count = await page.locator(sel).count()
+            if count > 0:
+                print(f"  Found {count} elements matching '{sel}'")
+
+        await page.close()
+
+        # Test Glassdoor
+        print("\n--- Testing Glassdoor ---")
+        page = await browser.new_page()
+        await page.goto("https://www.glassdoor.com/Job/jobs.htm?sc.keyword=solar+designer&locT=N&locId=1")
+        await page.wait_for_timeout(8000)
+
+        title = await page.title()
+        print(f"Page title: {title}")
+
+        await page.screenshot(path="debug_screenshots/glassdoor.png", full_page=True)
+        print("Saved screenshot to debug_screenshots/glassdoor.png")
+
+        # Check for various selectors
+        selectors_to_try = [
+            '[data-test="jobListing"]',
+            '.JobsList_jobListItem',
+            '.job-listing',
+            '.jobCard',
+            'li[data-id]',
+        ]
+        for sel in selectors_to_try:
+            count = await page.locator(sel).count()
+            if count > 0:
+                print(f"  Found {count} elements matching '{sel}'")
+
+        await page.close()
+
+
 if __name__ == "__main__":
-    # Test run
-    test_terms = ["solar designer"]
-    df, errors = run_camoufox_scraper(test_terms)
-    print(f"\nResults: {len(df)} jobs, {len(errors)} errors")
-    if not df.empty:
-        print(df.head())
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--debug":
+        # Debug mode: save screenshots
+        import asyncio
+        asyncio.run(debug_single_search())
+    else:
+        # Normal test run
+        test_terms = ["solar designer"]
+        df, errors = run_camoufox_scraper(test_terms)
+        print(f"\nResults: {len(df)} jobs, {len(errors)} errors")
+        if not df.empty:
+            print(df.head())

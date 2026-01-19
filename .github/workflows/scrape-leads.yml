@@ -46,6 +46,8 @@ jobs:
           # Enable Camoufox browser scraping for ZipRecruiter/Glassdoor
           # Camoufox uses Firefox with anti-detect patches, works better in CI than Chrome
           ENABLE_BROWSER_SCRAPING: "1"
+          # Enable debug screenshots to diagnose selector issues
+          CAMOUFOX_DEBUG: "1"
         run: python scraper.py
 
       - name: Upload batch results
@@ -58,6 +60,15 @@ jobs:
             output/*.json
           retention-days: 1
           if-no-files-found: ignore  # Don't fail if no files produced
+
+      - name: Upload debug screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-screenshots-batch-${{ matrix.batch }}
+          path: output/debug_screenshots/
+          retention-days: 7
+          if-no-files-found: ignore
 
   merge:
     needs: scrape
