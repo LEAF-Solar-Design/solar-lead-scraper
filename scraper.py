@@ -579,7 +579,7 @@ def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
         print(f"Searching for: {term}")
         try:
             jobs = scrape_jobs(
-                site_name=["indeed", "zip_recruiter", "glassdoor"],
+                site_name=["indeed", "google"],
                 search_term=term,
                 location="USA",
                 results_wanted=results_per_term,
