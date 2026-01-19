@@ -2,4 +2,4 @@ python-jobspy
 pandas
 scikit-learn
 requests
-nodriver
+camoufox[geoip]

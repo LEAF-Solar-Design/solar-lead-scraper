@@ -986,12 +986,13 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
             time.sleep(delay)
 
     # Try browser-based scraping for Cloudflare-protected sites (ZipRecruiter, Glassdoor)
-    # Only runs if ENABLE_BROWSER_SCRAPING=1 and nodriver is available
+    # Uses Camoufox (Firefox-based anti-detect browser) for better CI compatibility
+    # Only runs if ENABLE_BROWSER_SCRAPING=1 and camoufox is available
     if os.environ.get("ENABLE_BROWSER_SCRAPING") == "1":
         try:
-            from browser_scraper import run_browser_scraper
-            print("\n--- Browser Scraping (ZipRecruiter, Glassdoor) ---")
-            browser_jobs, browser_errors = run_browser_scraper(search_terms)
+            from camoufox_scraper import run_camoufox_scraper
+            print("\n--- Camoufox Browser Scraping (ZipRecruiter, Glassdoor) ---")
+            browser_jobs, browser_errors = run_camoufox_scraper(search_terms)
             if not browser_jobs.empty:
                 all_jobs.append(browser_jobs)
             # Convert browser errors to SearchError format
@@ -1004,9 +1005,10 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                     attempts=1
                 ))
         except ImportError:
-            print("\nBrowser scraper not available (nodriver not installed)")
+            print("\nCamoufox scraper not available (camoufox not installed)")
+            print("Install with: pip install camoufox[geoip] && camoufox fetch")
         except Exception as e:
-            print(f"\nBrowser scraping failed: {str(e)[:200]}")
+            print(f"\nCamoufox browser scraping failed: {str(e)[:200]}")
     else:
         print("\nENABLE_BROWSER_SCRAPING not set - skipping ZipRecruiter/Glassdoor")
 
