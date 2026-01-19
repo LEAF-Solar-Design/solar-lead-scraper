@@ -13,8 +13,8 @@
   ],
 
   "required_context": {
-    "patterns": ["solar", "pv", "photovoltaic", "energy storage", "battery storage", "bess", "renewables", "renewable energy"],
-    "description": "Must have solar/PV/storage/renewables context to qualify"
+    "patterns": ["solar", "pv", "photovoltaic", "helioscope", "pvsyst"],
+    "description": "Must have solar/PV/Helioscope/PVSyst context in title or description to qualify"
   },
 
   "exclusions": {

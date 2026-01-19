@@ -314,12 +314,13 @@ def score_company(company_name: str, config: dict) -> tuple[float, list[str]]:
     return (0.0, [])
 
 
-def score_role(description: str, config: dict) -> tuple[float, list[str]]:
+def score_role(description: str, config: dict, title: str = None) -> tuple[float, list[str]]:
     """Score based on role/description signals only.
 
     Args:
         description: Job description text
         config: Configuration dictionary
+        title: Optional job title for context checking
 
     Returns:
         Tuple of (score, reasons_list)
@@ -329,15 +330,23 @@ def score_role(description: str, config: dict) -> tuple[float, list[str]]:
         return (0.0, ["No description provided"])
 
     desc_lower = description.lower()
+    title_lower = title.lower() if title and isinstance(title, str) else ""
     reasons = []
     score = 0.0
 
-    # Required context check (solar/PV)
+    # Required context check (solar/PV/Helioscope/PVSyst)
+    # Must appear in EITHER the title OR the description
     required = config["required_context"]["patterns"]
-    has_required = any(p in desc_lower for p in required)
-    if not has_required:
-        return (0.0, ["Missing required solar/PV context"])
-    reasons.append("+0: Has solar/PV context (required)")
+    has_required_in_title = any(p in title_lower for p in required)
+    has_required_in_desc = any(p in desc_lower for p in required)
+
+    if not has_required_in_title and not has_required_in_desc:
+        return (0.0, ["Missing required solar/PV context in title or description"])
+
+    if has_required_in_title:
+        reasons.append("+0: Has solar/PV context in title (required)")
+    else:
+        reasons.append("+0: Has solar/PV context in description (required)")
 
     # Check all exclusions (any match = immediate -100)
     # Some exclusions only check the title area (first 200 chars) to avoid false positives
@@ -413,7 +422,7 @@ def score_role(description: str, config: dict) -> tuple[float, list[str]]:
     return (score, reasons)
 
 
-def score_job(description: str, company_name: str = None, config: dict = None) -> ScoringResult:
+def score_job(description: str, company_name: str = None, config: dict = None, title: str = None) -> ScoringResult:
     """Score a job posting and return detailed results.
 
     Combines company-level and role-level scoring into a single result.
@@ -422,6 +431,7 @@ def score_job(description: str, company_name: str = None, config: dict = None) -
         description: Job description text
         company_name: Optional company name for blocklist check
         config: Optional config dict (uses get_config() if not provided)
+        title: Optional job title for context checking
 
     Returns:
         ScoringResult with total score, company_score, role_score, and reasons
@@ -445,8 +455,8 @@ def score_job(description: str, company_name: str = None, config: dict = None) -
             threshold=threshold
         )
 
-    # Score role/description
-    role_score, role_reasons = score_role(description, config)
+    # Score role/description (pass title for required context check)
+    role_score, role_reasons = score_role(description, config, title=title)
 
     # If role is excluded, short-circuit
     if role_score < 0:
@@ -1020,7 +1030,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         qualified_mask = []
 
         for idx, row in df.iterrows():
-            result = score_job(row['description'], row.get('company'))
+            result = score_job(row['description'], row.get('company'), title=row.get('title'))
 
             if result.qualified:
                 tier = extract_tier_from_reasons(result.reasons)

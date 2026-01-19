@@ -47,12 +47,15 @@ jobs:
           SCRAPER_PROXIES: ${{ secrets.SCRAPER_PROXIES }}
           SCRAPER_BATCH: ${{ matrix.batch }}
           SCRAPER_TOTAL_BATCHES: 4
-          ENABLE_BROWSER_SCRAPING: "1"
+          # Browser scraping disabled - nodriver has compatibility issues with GitHub Actions root user
+          # See: https://github.com/ultrafunkamsterdam/undetected-chromedriver/discussions/1861
+          # To re-enable: set ENABLE_BROWSER_SCRAPING: "1" and uncomment Xvfb lines below
+          ENABLE_BROWSER_SCRAPING: "0"
           DISPLAY: ":99"
         run: |
-          # Start Xvfb virtual display for browser automation
-          Xvfb :99 -screen 0 1920x1080x24 &
-          sleep 2
+          # Start Xvfb virtual display for browser automation (if enabled)
+          # Xvfb :99 -screen 0 1920x1080x24 &
+          # sleep 2
           # Run the scraper
           python scraper.py
 

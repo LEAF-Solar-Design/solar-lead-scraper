@@ -184,27 +184,59 @@ async def scrape_with_browser(
         # Start browser with Xvfb-compatible settings
         # When running as root (e.g., in GitHub Actions), Chrome needs sandbox=False
         # See: https://github.com/ultrafunkamsterdam/nodriver
+        import shutil
 
         # Detect if running as root (GitHub Actions, Docker, etc.)
         is_root = os.geteuid() == 0 if hasattr(os, 'geteuid') else False
         if is_root:
             print("[Browser] Running as root - disabling sandbox")
 
+        # Find Chrome binary - GitHub Actions installs to standard location
+        chrome_paths = [
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/chromium',
+            shutil.which('google-chrome-stable'),
+            shutil.which('google-chrome'),
+            shutil.which('chromium'),
+        ]
+        chrome_path = None
+        for path in chrome_paths:
+            if path and os.path.exists(path):
+                chrome_path = path
+                break
+
+        if chrome_path:
+            print(f"[Browser] Found Chrome at: {chrome_path}")
+        else:
+            print("[Browser] WARNING: Chrome not found in standard locations")
+
         browser_args = [
+            '--no-sandbox',  # Explicitly add for root
+            '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',  # Overcome limited /dev/shm in containers
             '--disable-blink-features=AutomationControlled',
             '--disable-infobars',
             '--window-size=1920,1080',
             '--disable-gpu',  # Avoid GPU issues in virtual display
+            '--remote-debugging-port=0',  # Let Chrome pick a port
         ]
 
         # nodriver's start() function has a sandbox parameter
         # Setting sandbox=False adds --no-sandbox automatically
-        browser = await uc.start(
-            headless=False,  # Use Xvfb instead of headless for better anti-detection
-            browser_args=browser_args,
-            sandbox=False,  # Required when running as root in CI environments
-        )
+        start_kwargs = {
+            'headless': False,  # Use Xvfb instead of headless for better anti-detection
+            'browser_args': browser_args,
+            'sandbox': False,  # Required when running as root in CI environments
+        }
+
+        # Specify Chrome path if found
+        if chrome_path:
+            start_kwargs['browser_executable_path'] = chrome_path
+
+        print(f"[Browser] Starting with args: sandbox=False, headless=False")
+        browser = await uc.start(**start_kwargs)
 
         print("Browser started successfully")
 
