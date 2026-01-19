@@ -182,11 +182,13 @@ async def scrape_with_browser(
 
     try:
         # Start browser with Xvfb-compatible settings
-        # When running as root (e.g., in GitHub Actions), Chrome needs --no-sandbox
+        # When running as root (e.g., in GitHub Actions), Chrome needs sandbox=False
         # See: https://github.com/ultrafunkamsterdam/nodriver
 
         # Detect if running as root (GitHub Actions, Docker, etc.)
         is_root = os.geteuid() == 0 if hasattr(os, 'geteuid') else False
+        if is_root:
+            print("[Browser] Running as root - disabling sandbox")
 
         browser_args = [
             '--disable-dev-shm-usage',  # Overcome limited /dev/shm in containers
@@ -196,15 +198,12 @@ async def scrape_with_browser(
             '--disable-gpu',  # Avoid GPU issues in virtual display
         ]
 
-        # Add --no-sandbox when running as root (required for Chrome in CI)
-        if is_root:
-            print("[Browser] Running as root - adding --no-sandbox flag")
-            browser_args.insert(0, '--no-sandbox')
-            browser_args.insert(1, '--disable-setuid-sandbox')
-
+        # nodriver's start() function has a sandbox parameter
+        # Setting sandbox=False adds --no-sandbox automatically
         browser = await uc.start(
             headless=False,  # Use Xvfb instead of headless for better anti-detection
             browser_args=browser_args,
+            sandbox=False,  # Required when running as root in CI environments
         )
 
         print("Browser started successfully")
