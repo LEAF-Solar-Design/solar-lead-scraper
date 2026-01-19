@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import requests
 from jobspy import scrape_jobs
 
 
@@ -211,9 +212,13 @@ def score_role(description: str, config: dict) -> tuple[float, list[str]]:
     reasons.append("+0: Has solar/PV context (required)")
 
     # Check all exclusions (any match = immediate -100)
+    # Some exclusions only check the title area (first 200 chars) to avoid false positives
+    title_area = desc_lower[:200]
     for name, excl in config["exclusions"].items():
+        check_area = excl.get("check_area", "description")
+        text_to_check = title_area if check_area == "title" else desc_lower
         for pattern in excl["patterns"]:
-            if pattern in desc_lower:
+            if pattern in text_to_check:
                 return (-100.0, [f"Excluded: {excl['description']} (matched '{pattern}')"])
 
     # Check design role indicators (used by multiple tiers)
@@ -587,6 +592,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         # Core drafter/designer roles
         "electrical designer",
         "electrical drafter",
+        "electrical design technician",
         "CAD designer",
         "CAD drafter",
         "CAD technician",
@@ -690,11 +696,15 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
     search_errors = []  # Track all search failures
     results_per_term = 1000  # Wide net, filter does the work
 
-    # Job sites to scrape - try all sites but handle failures gracefully
-    # Indeed/Google: Most reliable, few blocks
-    # LinkedIn: Rate limits quickly without proxies
-    # ZipRecruiter/Glassdoor: Cloudflare protected, need good fingerprints
-    all_sites = ["indeed", "google", "linkedin", "zip_recruiter", "glassdoor"]
+    # Job sites to scrape - only use reliably working sources
+    # Indeed: Most reliable, rarely blocks
+    # LinkedIn: Works but rate limits quickly without proxies
+    #
+    # NOT SUPPORTED (as of Jan 2026):
+    # - Google: Requires manual query syntax calibration (Issue #302)
+    # - ZipRecruiter: Cloudflare blocked (Issue #270)
+    # - Glassdoor: Cloudflare blocked (Issue #272)
+    all_sites = ["indeed", "linkedin"]
 
     # Realistic browser user agents - rotate to avoid fingerprint detection
     # These should match what tls-client uses internally for consistency
@@ -815,6 +825,31 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
             delay = random.uniform(10, 20)  # 10-20 seconds between searches
             print(f"  Waiting {delay:.1f}s before next search...")
             time.sleep(delay)
+
+    # Try browser-based scraping for Cloudflare-protected sites (ZipRecruiter, Glassdoor)
+    # Only runs if ENABLE_BROWSER_SCRAPING=1 and nodriver is available
+    if os.environ.get("ENABLE_BROWSER_SCRAPING") == "1":
+        try:
+            from browser_scraper import run_browser_scraper
+            print("\n--- Browser Scraping (ZipRecruiter, Glassdoor) ---")
+            browser_jobs, browser_errors = run_browser_scraper(search_terms)
+            if not browser_jobs.empty:
+                all_jobs.append(browser_jobs)
+            # Convert browser errors to SearchError format
+            for err in browser_errors:
+                search_errors.append(SearchError(
+                    search_term=err.get("search_term", ""),
+                    site=err.get("site", "browser"),
+                    error_type=err.get("error_type", "unknown"),
+                    error_message=err.get("error_message", ""),
+                    attempts=1
+                ))
+        except ImportError:
+            print("\nBrowser scraper not available (nodriver not installed)")
+        except Exception as e:
+            print(f"\nBrowser scraping failed: {str(e)[:200]}")
+    else:
+        print("\nENABLE_BROWSER_SCRAPING not set - skipping ZipRecruiter/Glassdoor")
 
     if not all_jobs:
         print("No jobs found!")

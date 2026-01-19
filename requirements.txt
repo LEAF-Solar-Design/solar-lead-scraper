@@ -1,3 +1,5 @@
 python-jobspy
 pandas
 scikit-learn
+requests
+nodriver
