@@ -51,6 +51,134 @@ class SearchError:
 
 
 @dataclass
+class SiteStats:
+    """Statistics for a single job site during a scrape run.
+
+    Attributes:
+        site: Name of the job site (indeed, linkedin, etc.)
+        searches_attempted: Number of search terms attempted
+        searches_successful: Number of searches that returned results
+        total_jobs_found: Total jobs returned across all searches
+        blocked: Whether site was blocked during this run
+        blocked_at_term: Search term when site was first blocked (if blocked)
+        error_count: Number of non-blocking errors encountered
+    """
+    site: str
+    searches_attempted: int = 0
+    searches_successful: int = 0
+    total_jobs_found: int = 0
+    blocked: bool = False
+    blocked_at_term: str | None = None
+    error_count: int = 0
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON export."""
+        return {
+            "site": self.site,
+            "searches_attempted": self.searches_attempted,
+            "searches_successful": self.searches_successful,
+            "total_jobs_found": self.total_jobs_found,
+            "blocked": self.blocked,
+            "blocked_at_term": self.blocked_at_term,
+            "error_count": self.error_count,
+            "success_rate": round(self.searches_successful / self.searches_attempted * 100, 1) if self.searches_attempted > 0 else 0.0
+        }
+
+
+@dataclass
+class ScrapeStats:
+    """Overall statistics for a scrape run.
+
+    Attributes:
+        run_id: Unique identifier for this run (timestamp)
+        batch: Batch number if running in parallel mode
+        total_batches: Total number of batches
+        start_time: When the scrape started
+        end_time: When the scrape finished
+        search_terms_total: Total search terms to process
+        search_terms_completed: Search terms actually processed
+        site_stats: Per-site statistics
+        blocked_sites: List of sites that got blocked with details
+        total_jobs_raw: Total jobs before filtering
+        total_jobs_filtered: Jobs after filtering
+        unique_companies: Number of unique companies in results
+    """
+    run_id: str
+    batch: int | None = None
+    total_batches: int = 1
+    start_time: str = field(default_factory=lambda: datetime.now().isoformat())
+    end_time: str | None = None
+    search_terms_total: int = 0
+    search_terms_completed: int = 0
+    site_stats: dict[str, SiteStats] = field(default_factory=dict)
+    blocked_sites: list[dict] = field(default_factory=list)
+    total_jobs_raw: int = 0
+    total_jobs_filtered: int = 0
+    unique_companies: int = 0
+
+    def record_site_attempt(self, site: str) -> None:
+        """Record that a search was attempted on a site."""
+        if site not in self.site_stats:
+            self.site_stats[site] = SiteStats(site=site)
+        self.site_stats[site].searches_attempted += 1
+
+    def record_site_success(self, site: str, jobs_found: int) -> None:
+        """Record a successful search on a site."""
+        if site not in self.site_stats:
+            self.site_stats[site] = SiteStats(site=site)
+        self.site_stats[site].searches_successful += 1
+        self.site_stats[site].total_jobs_found += jobs_found
+
+    def record_site_blocked(self, site: str, search_term: str, error_message: str) -> None:
+        """Record that a site was blocked."""
+        if site not in self.site_stats:
+            self.site_stats[site] = SiteStats(site=site)
+        self.site_stats[site].blocked = True
+        self.site_stats[site].blocked_at_term = search_term
+        self.blocked_sites.append({
+            "site": site,
+            "search_term": search_term,
+            "error_message": error_message[:500],
+            "timestamp": datetime.now().isoformat()
+        })
+
+    def record_site_error(self, site: str) -> None:
+        """Record a non-blocking error on a site."""
+        if site not in self.site_stats:
+            self.site_stats[site] = SiteStats(site=site)
+        self.site_stats[site].error_count += 1
+
+    def finish(self) -> None:
+        """Mark the run as complete."""
+        self.end_time = datetime.now().isoformat()
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON export."""
+        return {
+            "metadata": {
+                "run_id": self.run_id,
+                "batch": self.batch,
+                "total_batches": self.total_batches,
+                "start_time": self.start_time,
+                "end_time": self.end_time,
+            },
+            "search_terms": {
+                "total": self.search_terms_total,
+                "completed": self.search_terms_completed,
+                "completion_rate": round(self.search_terms_completed / self.search_terms_total * 100, 1) if self.search_terms_total > 0 else 0.0
+            },
+            "sites": {name: stats.to_dict() for name, stats in self.site_stats.items()},
+            "blocked_sites": self.blocked_sites,
+            "results": {
+                "total_jobs_raw": self.total_jobs_raw,
+                "total_jobs_filtered": self.total_jobs_filtered,
+                "unique_companies": self.unique_companies,
+                "filter_rate": round((1 - self.total_jobs_filtered / self.total_jobs_raw) * 100, 1) if self.total_jobs_raw > 0 else 0.0
+            }
+        }
+
+
+@dataclass
 class ScoringResult:
     """Result of scoring a job posting.
 
@@ -569,13 +697,14 @@ def classify_error(error: Exception) -> str:
     return "unknown"
 
 
-def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple[pd.DataFrame, FilterStats, list[dict], dict, list[SearchError]]:
+def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: str | None = None) -> tuple[pd.DataFrame, FilterStats, list[dict], dict, list[SearchError], ScrapeStats]:
     """Scrape solar design/CAD jobs from multiple sources.
 
     Args:
         batch: If set, only run search terms for this batch (0-indexed).
                Used for parallel execution across multiple runners.
         total_batches: Number of batches to split search terms into.
+        run_id: Unique identifier for this run (defaults to timestamp).
 
     Returns:
         Tuple of:
@@ -584,6 +713,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         - list of rejected lead dicts for labeling export
         - dict mapping row indices to ScoringResult for confidence calculation
         - list of SearchError objects for failed searches
+        - ScrapeStats with scraping statistics
     """
 
     # Wide net search - generic role names that our filter will narrow down
@@ -692,6 +822,16 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
     else:
         search_terms = all_search_terms
 
+    # Initialize scrape stats tracking
+    if run_id is None:
+        run_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    scrape_stats = ScrapeStats(
+        run_id=run_id,
+        batch=batch,
+        total_batches=total_batches,
+        search_terms_total=len(search_terms)
+    )
+
     all_jobs = []
     search_errors = []  # Track all search failures
     results_per_term = 1000  # Wide net, filter does the work
@@ -748,6 +888,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         for site in sites_to_try:
             site_success = False
             site_error = None
+            scrape_stats.record_site_attempt(site)
 
             for attempt in range(2):  # 2 retries per site (less aggressive)
                 try:
@@ -767,8 +908,11 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
                         jobs['search_term'] = term
                         jobs['source_site'] = site
                         term_jobs.append(jobs)
+                        scrape_stats.record_site_success(site, len(jobs))
                         print(f"  [{site}] Found {len(jobs)} jobs")
                     else:
+                        # No results but no error - still counts as successful search
+                        scrape_stats.record_site_success(site, 0)
                         print(f"  [{site}] No results")
                     site_success = True
                     break
@@ -781,6 +925,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
                     if error_type == "blocked":
                         print(f"  [{site}] Site appears blocked, skipping for rest of run")
                         blocked_sites.add(site)
+                        scrape_stats.record_site_blocked(site, term, str(e))
                         break
 
                     # Brief delay before retry
@@ -789,10 +934,14 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
 
             if not site_success and site not in blocked_sites:
                 term_errors.append((site, site_error))
+                scrape_stats.record_site_error(site)
 
             # Small delay between sites to be polite
             if site != sites_to_try[-1]:
                 time.sleep(random.uniform(2, 5))
+
+        # Track that we completed this search term
+        scrape_stats.search_terms_completed += 1
 
         # Aggregate results for this term
         if term_jobs:
@@ -853,7 +1002,8 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
 
     if not all_jobs:
         print("No jobs found!")
-        return pd.DataFrame(), FilterStats(), [], {}, search_errors
+        scrape_stats.finish()
+        return pd.DataFrame(), FilterStats(), [], {}, search_errors, scrape_stats
 
     # Combine all results
     df = pd.concat(all_jobs, ignore_index=True)
@@ -896,10 +1046,16 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
 
         df = df[qualified_mask]
         print(f"After filtering: {len(df)} qualified leads (filtered out {before_filter - len(df)})")
+        # Update scrape stats with results
+        scrape_stats.total_jobs_raw = before_filter
+        scrape_stats.total_jobs_filtered = len(df)
     else:
         print("Warning: No description column available for filtering")
+        scrape_stats.total_jobs_raw = len(df)
+        scrape_stats.total_jobs_filtered = len(df)
 
-    return df, stats, rejected_leads, scoring_results, search_errors
+    scrape_stats.finish()
+    return df, stats, rejected_leads, scoring_results, search_errors, scrape_stats
 
 
 def export_search_errors(
@@ -939,6 +1095,51 @@ def export_search_errors(
     }
 
     filename = f"search_errors_{run_id}.json" if batch is None else f"search_errors_{run_id}_batch{batch}.json"
+    filepath = output_dir / filename
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(export_data, f, indent=2)
+
+    return filepath
+
+
+def export_run_stats(
+    scrape_stats: ScrapeStats,
+    filter_stats: FilterStats,
+    output_dir: Path,
+    unique_companies: int = 0
+) -> Path:
+    """Export comprehensive run statistics to JSON for dashboard.
+
+    Args:
+        scrape_stats: Scraping statistics (sites, jobs found, blocked, etc.)
+        filter_stats: Filtering statistics (qualified, rejected, reasons)
+        output_dir: Directory to write JSON file
+        unique_companies: Number of unique companies in final results
+
+    Returns:
+        Path to the created file
+    """
+    # Update unique companies count
+    scrape_stats.unique_companies = unique_companies
+
+    # Combine scrape stats with filter stats
+    export_data = scrape_stats.to_dict()
+
+    # Add filter statistics
+    export_data["filter"] = {
+        "total_processed": filter_stats.total_processed,
+        "qualified": filter_stats.total_qualified,
+        "rejected": filter_stats.total_rejected,
+        "pass_rate": round(filter_stats.pass_rate, 2),
+        "company_blocked": filter_stats.company_blocked,
+        "rejection_reasons": dict(filter_stats.rejection_categories.most_common(10)),
+        "qualification_tiers": dict(filter_stats.qualification_tiers)
+    }
+
+    filename = f"run_stats_{scrape_stats.run_id}.json"
+    if scrape_stats.batch is not None:
+        filename = f"run_stats_{scrape_stats.run_id}_batch{scrape_stats.batch}.json"
+
     filepath = output_dir / filename
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(export_data, f, indent=2)
@@ -1045,13 +1246,15 @@ def main():
     batch = int(batch_env) if batch_env is not None else None
     total_batches = int(total_batches_env)
 
-    # Scrape jobs
-    raw_jobs, stats, rejected_leads, scoring_results, search_errors = scrape_solar_jobs(batch=batch, total_batches=total_batches)
-
-    # Ensure output directory exists (needed for search errors export even if no jobs)
+    # Ensure output directory exists (needed for exports even if no jobs)
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(exist_ok=True)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    # Scrape jobs
+    raw_jobs, stats, rejected_leads, scoring_results, search_errors, scrape_stats = scrape_solar_jobs(
+        batch=batch, total_batches=total_batches, run_id=timestamp
+    )
 
     # Always export search errors if any occurred
     if search_errors:
@@ -1062,6 +1265,9 @@ def main():
         print("No jobs to process. Exiting.")
         # Still print stats even if empty
         print_filter_stats(stats)
+        # Export run stats even with no results
+        stats_path = export_run_stats(scrape_stats, stats, output_dir, unique_companies=0)
+        print(f"\nExported run stats to: {stats_path}")
         return
 
     # Process and dedupe
@@ -1070,6 +1276,9 @@ def main():
     if leads.empty:
         print("No leads after processing. Exiting.")
         print_filter_stats(stats)
+        # Export run stats even with no results
+        stats_path = export_run_stats(scrape_stats, stats, output_dir, unique_companies=0)
+        print(f"\nExported run stats to: {stats_path}")
         return
 
     # Print filter statistics
@@ -1083,6 +1292,10 @@ def main():
     # Save qualified leads to CSV
     output_file = output_dir / f"solar_leads_{timestamp}.csv"
     leads.to_csv(output_file, index=False)
+
+    # Export comprehensive run stats
+    stats_path = export_run_stats(scrape_stats, stats, output_dir, unique_companies=len(leads))
+    print(f"\nExported run stats to: {stats_path}")
 
     print()
     print("=" * 50)
