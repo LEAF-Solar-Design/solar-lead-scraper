@@ -615,7 +615,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         for attempt in range(3):  # Up to 3 retries per term
             try:
                 scrape_kwargs = {
-                    "site_name": ["indeed", "google"],
+                    "site_name": ["indeed", "google", "linkedin"],
                     "search_term": term,
                     "location": "USA",
                     "results_wanted": results_per_term,
