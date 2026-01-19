@@ -52,7 +52,13 @@ def upload_to_dashboard(csv_path: str):
 
 
 def main():
-    csv_path = get_latest_csv()
+    try:
+        csv_path = get_latest_csv()
+    except FileNotFoundError:
+        print("No CSV files found in output/ - scraper may have produced no results")
+        print("Skipping upload (this is not a fatal error)")
+        return
+
     print(f"Found latest CSV: {csv_path}")
     upload_to_dashboard(csv_path)
 

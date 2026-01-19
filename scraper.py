@@ -4,7 +4,10 @@ Finds companies hiring for solar CAD/design roles to use as sales leads.
 """
 
 import json
+import os
+import random
 import re
+import time
 import urllib.parse
 from collections import Counter
 from dataclasses import dataclass, field
@@ -499,8 +502,13 @@ def extract_tier_from_reasons(reasons: list[str]) -> str:
     return "unknown"
 
 
-def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
+def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
     """Scrape solar design/CAD jobs from multiple sources.
+
+    Args:
+        batch: If set, only run search terms for this batch (0-indexed).
+               Used for parallel execution across multiple runners.
+        total_batches: Number of batches to split search terms into.
 
     Returns:
         Tuple of:
@@ -512,7 +520,7 @@ def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
 
     # Wide net search - generic role names that our filter will narrow down
     # The filter is strict, so we can afford to search broadly here
-    search_terms = [
+    all_search_terms = [
         # Core drafter/designer roles
         "electrical designer",
         "electrical drafter",
@@ -572,25 +580,81 @@ def scrape_solar_jobs() -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
         "rooftop solar",
     ]
 
+    # Split search terms into batches if batch mode is enabled
+    if batch is not None:
+        # Divide terms into roughly equal batches
+        batch_size = len(all_search_terms) // total_batches
+        remainder = len(all_search_terms) % total_batches
+
+        # Calculate start and end indices for this batch
+        start_idx = batch * batch_size + min(batch, remainder)
+        end_idx = start_idx + batch_size + (1 if batch < remainder else 0)
+
+        search_terms = all_search_terms[start_idx:end_idx]
+        print(f"Batch {batch + 1}/{total_batches}: processing {len(search_terms)} search terms")
+    else:
+        search_terms = all_search_terms
+
     all_jobs = []
     results_per_term = 1000  # Wide net, filter does the work
 
-    for term in search_terms:
-        print(f"Searching for: {term}")
-        try:
-            jobs = scrape_jobs(
-                site_name=["indeed", "google"],
-                search_term=term,
-                location="USA",
-                results_wanted=results_per_term,
-                country_indeed="USA",
-            )
-            if not jobs.empty:
-                jobs['search_term'] = term
-                all_jobs.append(jobs)
-                print(f"  Found {len(jobs)} jobs")
-        except Exception as e:
-            print(f"  Error searching '{term}': {e}")
+    # Optional proxy support - set SCRAPER_PROXIES env var with comma-separated proxies
+    # Format: "user:pass@host:port,user:pass@host:port" or "host:port,host:port"
+    proxy_env = os.environ.get("SCRAPER_PROXIES", "")
+    proxies = [p.strip() for p in proxy_env.split(",") if p.strip()] if proxy_env else None
+    if proxies:
+        print(f"Using {len(proxies)} proxy server(s)")
+
+    consecutive_failures = 0
+    max_consecutive_failures = 3  # Stop if 3 in a row fail (likely IP blocked)
+
+    for i, term in enumerate(search_terms):
+        print(f"Searching for: {term} ({i + 1}/{len(search_terms)})")
+
+        success = False
+        for attempt in range(3):  # Up to 3 retries per term
+            try:
+                scrape_kwargs = {
+                    "site_name": ["indeed", "google"],
+                    "search_term": term,
+                    "location": "USA",
+                    "results_wanted": results_per_term,
+                    "country_indeed": "USA",
+                }
+                if proxies:
+                    scrape_kwargs["proxies"] = proxies
+
+                jobs = scrape_jobs(**scrape_kwargs)
+                if not jobs.empty:
+                    jobs['search_term'] = term
+                    all_jobs.append(jobs)
+                    print(f"  Found {len(jobs)} jobs")
+                else:
+                    print(f"  No results for this term")
+                success = True
+                consecutive_failures = 0
+                break
+            except Exception as e:
+                wait_time = (attempt + 1) * 30  # 30s, 60s, 90s backoff
+                print(f"  Attempt {attempt + 1} failed: {e}")
+                if attempt < 2:
+                    print(f"  Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+
+        if not success:
+            consecutive_failures += 1
+            print(f"  All retries failed for '{term}' ({consecutive_failures} consecutive failures)")
+
+            if consecutive_failures >= max_consecutive_failures:
+                print(f"\n  {max_consecutive_failures} consecutive failures - likely rate limited. Stopping early.")
+                print(f"  Completed {i + 1 - max_consecutive_failures}/{len(search_terms)} terms before stopping.")
+                break
+
+        # Delay between searches to avoid rate limiting (skip after last term)
+        if i < len(search_terms) - 1:
+            delay = random.uniform(10, 20)  # 10-20 seconds between searches
+            print(f"  Waiting {delay:.1f}s before next search...")
+            time.sleep(delay)
 
     if not all_jobs:
         print("No jobs found!")
@@ -735,8 +799,15 @@ def main():
     print("=" * 50)
     print()
 
+    # Check for batch mode (set by GitHub Actions matrix)
+    batch_env = os.environ.get("SCRAPER_BATCH")
+    total_batches_env = os.environ.get("SCRAPER_TOTAL_BATCHES", "4")
+
+    batch = int(batch_env) if batch_env is not None else None
+    total_batches = int(total_batches_env)
+
     # Scrape jobs
-    raw_jobs, stats, rejected_leads, scoring_results = scrape_solar_jobs()
+    raw_jobs, stats, rejected_leads, scoring_results = scrape_solar_jobs(batch=batch, total_batches=total_batches)
 
     if raw_jobs.empty:
         print("No jobs to process. Exiting.")

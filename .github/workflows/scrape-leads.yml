@@ -11,6 +11,10 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        batch: [0, 1, 2, 3]  # 4 parallel runners, each with different IP
+      fail-fast: false  # Continue other batches even if one fails
 
     steps:
       - name: Checkout code
@@ -28,8 +32,79 @@ jobs:
           pip install -r requirements.txt
           pip install requests
 
-      - name: Run scraper
+      - name: Run scraper (batch ${{ matrix.batch }})
+        env:
+          SCRAPER_PROXIES: ${{ secrets.SCRAPER_PROXIES }}
+          SCRAPER_BATCH: ${{ matrix.batch }}
+          SCRAPER_TOTAL_BATCHES: 4
         run: python scraper.py
+
+      - name: Upload batch results
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload even if scraper had partial failures
+        with:
+          name: batch-${{ matrix.batch }}
+          path: output/*.csv
+          retention-days: 1
+          if-no-files-found: ignore  # Don't fail if no CSV produced
+
+  merge:
+    needs: scrape
+    if: always()  # Run merge even if some batches failed
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests
+
+      - name: Download all batch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: batches/
+          pattern: batch-*
+
+      - name: Merge batch results
+        run: |
+          python -c "
+          import pandas as pd
+          from pathlib import Path
+          from datetime import datetime
+
+          # Find all CSV files from batches
+          csv_files = list(Path('batches').glob('**/solar_leads_*.csv'))
+          print(f'Found {len(csv_files)} batch files')
+
+          if not csv_files:
+              print('No CSV files found')
+              exit(0)
+
+          # Read and combine all CSVs
+          dfs = [pd.read_csv(f) for f in csv_files]
+          combined = pd.concat(dfs, ignore_index=True)
+          print(f'Combined: {len(combined)} total rows')
+
+          # Dedupe by company (keep first occurrence)
+          combined = combined.drop_duplicates(subset=['company'], keep='first')
+          print(f'After deduping: {len(combined)} unique companies')
+
+          # Save merged output
+          output_dir = Path('output')
+          output_dir.mkdir(exist_ok=True)
+          timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+          output_file = output_dir / f'solar_leads_{timestamp}.csv'
+          combined.to_csv(output_file, index=False)
+          print(f'Saved merged results to: {output_file}')
+          "
 
       - name: Upload results to dashboard
         env:
@@ -37,7 +112,7 @@ jobs:
           DASHBOARD_API_KEY: ${{ secrets.DASHBOARD_API_KEY }}
         run: python upload_results.py
 
-      - name: Upload CSV as artifact (backup)
+      - name: Upload merged CSV as artifact (backup)
         uses: actions/upload-artifact@v4
         with:
           name: solar-leads-${{ github.run_number }}
