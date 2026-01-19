@@ -689,7 +689,22 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
     all_jobs = []
     search_errors = []  # Track all search failures
     results_per_term = 1000  # Wide net, filter does the work
-    sites_str = "indeed,google,linkedin"  # For error tracking
+
+    # Job sites to scrape - try all sites but handle failures gracefully
+    # Indeed/Google: Most reliable, few blocks
+    # LinkedIn: Rate limits quickly without proxies
+    # ZipRecruiter/Glassdoor: Cloudflare protected, need good fingerprints
+    all_sites = ["indeed", "google", "linkedin", "zip_recruiter", "glassdoor"]
+
+    # Realistic browser user agents - rotate to avoid fingerprint detection
+    # These should match what tls-client uses internally for consistency
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+    ]
 
     # Optional proxy support - set SCRAPER_PROXIES env var with comma-separated proxies
     # Format: "user:pass@host:port,user:pass@host:port" or "host:port,host:port"
@@ -698,62 +713,102 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
     if proxies:
         print(f"Using {len(proxies)} proxy server(s)")
 
+    # Track which sites are blocked so we can skip them
+    blocked_sites = set()
+
     consecutive_failures = 0
     max_consecutive_failures = 3  # Stop if 3 in a row fail (likely IP blocked)
 
     for i, term in enumerate(search_terms):
         print(f"Searching for: {term} ({i + 1}/{len(search_terms)})")
 
-        success = False
-        last_error = None
-        for attempt in range(3):  # Up to 3 retries per term
-            try:
-                scrape_kwargs = {
-                    "site_name": ["indeed", "google", "linkedin"],
-                    "search_term": term,
-                    "location": "USA",
-                    "results_wanted": results_per_term,
-                    "country_indeed": "USA",
-                }
-                if proxies:
-                    scrape_kwargs["proxies"] = proxies
+        # Get sites to try (exclude any that have been blocked this run)
+        sites_to_try = [s for s in all_sites if s not in blocked_sites]
+        if not sites_to_try:
+            print("  All sites blocked! Stopping.")
+            break
 
-                jobs = scrape_jobs(**scrape_kwargs)
-                if not jobs.empty:
-                    jobs['search_term'] = term
-                    all_jobs.append(jobs)
-                    print(f"  Found {len(jobs)} jobs")
-                else:
-                    print(f"  No results for this term")
-                success = True
-                consecutive_failures = 0
-                break
-            except Exception as e:
-                last_error = e
-                wait_time = (attempt + 1) * 30  # 30s, 60s, 90s backoff
-                print(f"  Attempt {attempt + 1} failed: {e}")
-                if attempt < 2:
-                    print(f"  Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
+        # Rotate user agent for each search
+        current_ua = random.choice(user_agents)
 
-        if not success:
+        term_jobs = []
+        term_errors = []
+
+        # Try each site individually so one failure doesn't block others
+        for site in sites_to_try:
+            site_success = False
+            site_error = None
+
+            for attempt in range(2):  # 2 retries per site (less aggressive)
+                try:
+                    scrape_kwargs = {
+                        "site_name": [site],
+                        "search_term": term,
+                        "location": "USA",
+                        "results_wanted": results_per_term,
+                        "country_indeed": "USA",
+                        "user_agent": current_ua,
+                    }
+                    if proxies:
+                        scrape_kwargs["proxies"] = proxies
+
+                    jobs = scrape_jobs(**scrape_kwargs)
+                    if not jobs.empty:
+                        jobs['search_term'] = term
+                        jobs['source_site'] = site
+                        term_jobs.append(jobs)
+                        print(f"  [{site}] Found {len(jobs)} jobs")
+                    else:
+                        print(f"  [{site}] No results")
+                    site_success = True
+                    break
+                except Exception as e:
+                    site_error = e
+                    error_type = classify_error(e)
+                    print(f"  [{site}] Attempt {attempt + 1} failed ({error_type}): {str(e)[:100]}")
+
+                    # If blocked/403, mark site as blocked for this run
+                    if error_type == "blocked":
+                        print(f"  [{site}] Site appears blocked, skipping for rest of run")
+                        blocked_sites.add(site)
+                        break
+
+                    # Brief delay before retry
+                    if attempt < 1:
+                        time.sleep(15)
+
+            if not site_success and site not in blocked_sites:
+                term_errors.append((site, site_error))
+
+            # Small delay between sites to be polite
+            if site != sites_to_try[-1]:
+                time.sleep(random.uniform(2, 5))
+
+        # Aggregate results for this term
+        if term_jobs:
+            combined = pd.concat(term_jobs, ignore_index=True)
+            all_jobs.append(combined)
+            print(f"  Total for '{term}': {len(combined)} jobs from {len(term_jobs)} site(s)")
+            consecutive_failures = 0
+        else:
             consecutive_failures += 1
-            print(f"  All retries failed for '{term}' ({consecutive_failures} consecutive failures)")
+            print(f"  No results from any site for '{term}' ({consecutive_failures} consecutive failures)")
 
-            # Record the search error
-            error_type = classify_error(last_error) if last_error else "unknown"
+        # Record errors for sites that failed (but weren't just blocked)
+        for site, error in term_errors:
+            error_type = classify_error(error) if error else "unknown"
             search_errors.append(SearchError(
                 search_term=term,
-                site=sites_str,
+                site=site,
                 error_type=error_type,
-                error_message=str(last_error) if last_error else "Unknown error after all retries",
-                attempts=3
+                error_message=str(error)[:500] if error else "Unknown error",
+                attempts=2
             ))
 
-            if consecutive_failures >= max_consecutive_failures:
-                print(f"\n  {max_consecutive_failures} consecutive failures - likely rate limited. Stopping early.")
-                print(f"  Completed {i + 1 - max_consecutive_failures}/{len(search_terms)} terms before stopping.")
-                break
+        if consecutive_failures >= max_consecutive_failures:
+            print(f"\n  {max_consecutive_failures} consecutive failures - likely rate limited. Stopping early.")
+            print(f"  Completed {i + 1 - max_consecutive_failures}/{len(search_terms)} terms before stopping.")
+            break
 
         # Delay between searches to avoid rate limiting (skip after last term)
         if i < len(search_terms) - 1:
