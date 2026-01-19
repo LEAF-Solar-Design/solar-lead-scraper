@@ -19,6 +19,37 @@ from jobspy import scrape_jobs
 
 
 @dataclass
+class SearchError:
+    """Record of a failed search attempt.
+
+    Attributes:
+        search_term: The search term that failed
+        site: Which job site(s) were being queried
+        error_type: Category of error (rate_limit, blocked, timeout, unknown)
+        error_message: Full error message from exception
+        attempts: Number of retry attempts made
+        timestamp: When the error occurred
+    """
+    search_term: str
+    site: str
+    error_type: str
+    error_message: str
+    attempts: int
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON export."""
+        return {
+            "search_term": self.search_term,
+            "site": self.site,
+            "error_type": self.error_type,
+            "error_message": self.error_message,
+            "attempts": self.attempts,
+            "timestamp": self.timestamp
+        }
+
+
+@dataclass
 class ScoringResult:
     """Result of scoring a job posting.
 
@@ -502,7 +533,38 @@ def extract_tier_from_reasons(reasons: list[str]) -> str:
     return "unknown"
 
 
-def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple[pd.DataFrame, FilterStats, list[dict], dict]:
+def classify_error(error: Exception) -> str:
+    """Classify an exception into an error type category.
+
+    Args:
+        error: The exception that occurred
+
+    Returns:
+        Error type string: rate_limit, blocked, timeout, connection, or unknown
+    """
+    error_str = str(error).lower()
+    error_type = type(error).__name__.lower()
+
+    # Rate limiting indicators
+    if any(x in error_str for x in ["429", "too many requests", "rate limit", "throttl"]):
+        return "rate_limit"
+
+    # Blocked/forbidden indicators
+    if any(x in error_str for x in ["403", "forbidden", "blocked", "captcha", "cloudflare", "access denied"]):
+        return "blocked"
+
+    # Timeout indicators
+    if any(x in error_str for x in ["timeout", "timed out"]) or "timeout" in error_type:
+        return "timeout"
+
+    # Connection errors
+    if any(x in error_str for x in ["connection", "network", "dns", "refused"]) or "connection" in error_type:
+        return "connection"
+
+    return "unknown"
+
+
+def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple[pd.DataFrame, FilterStats, list[dict], dict, list[SearchError]]:
     """Scrape solar design/CAD jobs from multiple sources.
 
     Args:
@@ -516,6 +578,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         - FilterStats with run statistics
         - list of rejected lead dicts for labeling export
         - dict mapping row indices to ScoringResult for confidence calculation
+        - list of SearchError objects for failed searches
     """
 
     # Wide net search - generic role names that our filter will narrow down
@@ -555,29 +618,57 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         # Solar-specific searches
         "solar designer",
         "solar drafter",
+        "solar engineer",
         "solar design engineer",
         "PV designer",
+        "PV engineer",
         "PV design engineer",
         "PV system designer",
         "photovoltaic designer",
+        "photovoltaic engineer",
         "solar permit designer",
         "solar plans designer",
 
-        # Tool-based searches (very targeted)
+        # Tool-based searches (searches job descriptions, very targeted)
         "helioscope",
         "aurora solar",
         "PVsyst",
+        "PV production modeling",
+        "solar production modeling",
+        "solaredge designer",
 
-        # Strong signal searches
-        "stringing solar",
+        # Task-based searches (finds jobs by description content)
+        "string sizing solar",
+        "stringing diagram",
+        "module layout solar",
+        "panel layout solar",
+        "array layout solar",
+        "single line diagram solar",
+        "one-line diagram solar",
         "permit set solar",
         "plan set solar",
+        "construction drawings solar",
+        "wire schedule solar",
+        "conduit schedule solar",
 
         # Context-based searches
         "residential solar",
         "commercial solar",
         "utility scale solar",
         "rooftop solar",
+
+        # Energy storage (often paired with solar)
+        "battery storage engineer",
+        "energy storage engineer",
+        "battery storage designer",
+        "BESS engineer",
+        "BESS designer",
+
+        # Renewables general (catches solar+storage hybrid roles)
+        "renewables engineer",
+        "renewables designer",
+        "renewable energy engineer",
+        "renewable energy designer",
     ]
 
     # Split search terms into batches if batch mode is enabled
@@ -596,7 +687,9 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         search_terms = all_search_terms
 
     all_jobs = []
+    search_errors = []  # Track all search failures
     results_per_term = 1000  # Wide net, filter does the work
+    sites_str = "indeed,google,linkedin"  # For error tracking
 
     # Optional proxy support - set SCRAPER_PROXIES env var with comma-separated proxies
     # Format: "user:pass@host:port,user:pass@host:port" or "host:port,host:port"
@@ -612,6 +705,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         print(f"Searching for: {term} ({i + 1}/{len(search_terms)})")
 
         success = False
+        last_error = None
         for attempt in range(3):  # Up to 3 retries per term
             try:
                 scrape_kwargs = {
@@ -635,6 +729,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
                 consecutive_failures = 0
                 break
             except Exception as e:
+                last_error = e
                 wait_time = (attempt + 1) * 30  # 30s, 60s, 90s backoff
                 print(f"  Attempt {attempt + 1} failed: {e}")
                 if attempt < 2:
@@ -644,6 +739,16 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
         if not success:
             consecutive_failures += 1
             print(f"  All retries failed for '{term}' ({consecutive_failures} consecutive failures)")
+
+            # Record the search error
+            error_type = classify_error(last_error) if last_error else "unknown"
+            search_errors.append(SearchError(
+                search_term=term,
+                site=sites_str,
+                error_type=error_type,
+                error_message=str(last_error) if last_error else "Unknown error after all retries",
+                attempts=3
+            ))
 
             if consecutive_failures >= max_consecutive_failures:
                 print(f"\n  {max_consecutive_failures} consecutive failures - likely rate limited. Stopping early.")
@@ -658,7 +763,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
 
     if not all_jobs:
         print("No jobs found!")
-        return pd.DataFrame(), FilterStats(), [], {}
+        return pd.DataFrame(), FilterStats(), [], {}, search_errors
 
     # Combine all results
     df = pd.concat(all_jobs, ignore_index=True)
@@ -704,7 +809,51 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4) -> tuple
     else:
         print("Warning: No description column available for filtering")
 
-    return df, stats, rejected_leads, scoring_results
+    return df, stats, rejected_leads, scoring_results, search_errors
+
+
+def export_search_errors(
+    search_errors: list[SearchError],
+    output_dir: Path,
+    run_id: str,
+    batch: int | None = None
+) -> Path | None:
+    """Export search errors to JSON for dashboard review.
+
+    Args:
+        search_errors: List of SearchError objects
+        output_dir: Directory to write JSON file
+        run_id: Timestamp or identifier for this run
+        batch: Optional batch number if running in parallel mode
+
+    Returns:
+        Path to the created file, or None if no errors
+    """
+    if not search_errors:
+        return None
+
+    # Group errors by type for summary
+    error_summary = {}
+    for err in search_errors:
+        error_summary[err.error_type] = error_summary.get(err.error_type, 0) + 1
+
+    export_data = {
+        "metadata": {
+            "created": datetime.now().isoformat(),
+            "run_id": run_id,
+            "batch": batch,
+            "total_errors": len(search_errors),
+            "error_summary": error_summary
+        },
+        "errors": [err.to_dict() for err in search_errors]
+    }
+
+    filename = f"search_errors_{run_id}.json" if batch is None else f"search_errors_{run_id}_batch{batch}.json"
+    filepath = output_dir / filename
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(export_data, f, indent=2)
+
+    return filepath
 
 
 def process_jobs(df: pd.DataFrame, scoring_results: dict = None) -> pd.DataFrame:
@@ -807,7 +956,17 @@ def main():
     total_batches = int(total_batches_env)
 
     # Scrape jobs
-    raw_jobs, stats, rejected_leads, scoring_results = scrape_solar_jobs(batch=batch, total_batches=total_batches)
+    raw_jobs, stats, rejected_leads, scoring_results, search_errors = scrape_solar_jobs(batch=batch, total_batches=total_batches)
+
+    # Ensure output directory exists (needed for search errors export even if no jobs)
+    output_dir = Path(__file__).parent / "output"
+    output_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    # Always export search errors if any occurred
+    if search_errors:
+        errors_path = export_search_errors(search_errors, output_dir, timestamp, batch)
+        print(f"\nExported {len(search_errors)} search errors to: {errors_path}")
 
     if raw_jobs.empty:
         print("No jobs to process. Exiting.")
@@ -825,12 +984,6 @@ def main():
 
     # Print filter statistics
     print_filter_stats(stats)
-
-    # Ensure output directory exists
-    output_dir = Path(__file__).parent / "output"
-    output_dir.mkdir(exist_ok=True)
-
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     # Export rejected leads for labeling review
     if rejected_leads:

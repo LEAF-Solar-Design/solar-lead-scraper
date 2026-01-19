@@ -13,8 +13,8 @@
   ],
 
   "required_context": {
-    "patterns": ["solar", "pv", "photovoltaic"],
-    "description": "Must have solar/PV context to qualify"
+    "patterns": ["solar", "pv", "photovoltaic", "energy storage", "battery storage", "bess", "renewables", "renewable energy"],
+    "description": "Must have solar/PV/storage/renewables context to qualify"
   },
 
   "exclusions": {
@@ -54,25 +54,25 @@
 
   "positive_signals": {
     "tier1_tools": {
-      "patterns": ["helioscope", "aurora solar", "pvsyst", "solaredge designer", "opensolaris"],
+      "patterns": ["helioscope", "aurora solar", "pvsyst", "solaredge designer", "opensolaris", "pv production modeling", "solar production modeling", "string sizing", "stringing diagram", "module layout", "panel layout"],
       "weight": 100,
-      "description": "Solar-specific design tools - auto-qualify"
+      "description": "Solar-specific design tools and tasks - auto-qualify"
     },
     "tier2_strong": {
-      "patterns": ["string sizing", "stringing diagram", "stringing layout", "module layout", "array layout", "panel layout", "single line diagram", "one-line diagram", "sld ", "conduit schedule", "wiring schedule", "wire schedule", "permit set", "plan set", "permit package", "construction drawing", "voltage drop calculation", "voltage drop calc"],
+      "patterns": ["string sizing", "stringing diagram", "stringing layout", "module layout", "array layout", "panel layout", "single line diagram", "single-line diagram", "one-line diagram", "sld ", "conduit schedule", "wiring schedule", "wire schedule", "permit set", "plan set", "permit package", "construction drawing", "voltage drop calculation", "voltage drop calc"],
       "weight": 60,
       "requires": "design_role",
       "description": "Strong technical signals requiring design role"
     },
     "tier3_cad_project": {
       "patterns_cad": ["autocad", "auto cad", "revit", "sketchup", "bluebeam", "solidworks"],
-      "patterns_project": ["solar array", "pv array", "solar installation", "pv installation", "solar project", "pv project", "solar system", "pv system", "residential solar", "commercial solar", "utility solar", "utility-scale solar", "rooftop solar", "ground mount solar", "carport solar"],
+      "patterns_project": ["solar array", "pv array", "solar installation", "pv installation", "solar project", "pv project", "solar system", "pv system", "residential solar", "commercial solar", "utility solar", "utility-scale solar", "rooftop solar", "ground mount solar", "carport solar", "energy storage project", "battery storage project", "bess project", "storage system"],
       "weight": 40,
       "requires": "design_role",
-      "description": "General CAD + design role + solar project type"
+      "description": "General CAD + design role + solar/storage project type"
     },
     "tier4_title": {
-      "patterns": ["solar designer", "pv designer", "solar drafter", "pv drafter", "solar design engineer", "pv design engineer", "solar cad", "photovoltaic designer", "solar design technician"],
+      "patterns": ["solar designer", "pv designer", "solar drafter", "pv drafter", "solar design engineer", "pv design engineer", "solar cad", "photovoltaic designer", "solar design technician", "solar engineer", "pv engineer", "photovoltaic engineer"],
       "weight": 80,
       "check_area": "title",
       "description": "Explicit solar design job titles"

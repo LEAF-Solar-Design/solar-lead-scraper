@@ -44,9 +44,11 @@ jobs:
         if: always()  # Upload even if scraper had partial failures
         with:
           name: batch-${{ matrix.batch }}
-          path: output/*.csv
+          path: |
+            output/*.csv
+            output/*.json
           retention-days: 1
-          if-no-files-found: ignore  # Don't fail if no CSV produced
+          if-no-files-found: ignore  # Don't fail if no files produced
 
   merge:
     needs: scrape
@@ -76,34 +78,67 @@ jobs:
       - name: Merge batch results
         run: |
           python -c "
+          import json
           import pandas as pd
           from pathlib import Path
           from datetime import datetime
 
-          # Find all CSV files from batches
-          csv_files = list(Path('batches').glob('**/solar_leads_*.csv'))
-          print(f'Found {len(csv_files)} batch files')
-
-          if not csv_files:
-              print('No CSV files found')
-              exit(0)
-
-          # Read and combine all CSVs
-          dfs = [pd.read_csv(f) for f in csv_files]
-          combined = pd.concat(dfs, ignore_index=True)
-          print(f'Combined: {len(combined)} total rows')
-
-          # Dedupe by company (keep first occurrence)
-          combined = combined.drop_duplicates(subset=['company'], keep='first')
-          print(f'After deduping: {len(combined)} unique companies')
-
-          # Save merged output
           output_dir = Path('output')
           output_dir.mkdir(exist_ok=True)
           timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-          output_file = output_dir / f'solar_leads_{timestamp}.csv'
-          combined.to_csv(output_file, index=False)
-          print(f'Saved merged results to: {output_file}')
+
+          # Find all CSV files from batches
+          csv_files = list(Path('batches').glob('**/solar_leads_*.csv'))
+          print(f'Found {len(csv_files)} batch CSV files')
+
+          if csv_files:
+              # Read and combine all CSVs
+              dfs = [pd.read_csv(f) for f in csv_files]
+              combined = pd.concat(dfs, ignore_index=True)
+              print(f'Combined: {len(combined)} total rows')
+
+              # Dedupe by company (keep first occurrence)
+              combined = combined.drop_duplicates(subset=['company'], keep='first')
+              print(f'After deduping: {len(combined)} unique companies')
+
+              # Save merged output
+              output_file = output_dir / f'solar_leads_{timestamp}.csv'
+              combined.to_csv(output_file, index=False)
+              print(f'Saved merged leads to: {output_file}')
+          else:
+              print('No CSV files found')
+
+          # Find and merge all search error JSON files
+          error_files = list(Path('batches').glob('**/search_errors_*.json'))
+          print(f'Found {len(error_files)} search error files')
+
+          if error_files:
+              all_errors = []
+              total_by_type = {}
+
+              for filepath in error_files:
+                  with open(filepath) as f:
+                      data = json.load(f)
+                  all_errors.extend(data.get('errors', []))
+                  for error_type, count in data.get('metadata', {}).get('error_summary', {}).items():
+                      total_by_type[error_type] = total_by_type.get(error_type, 0) + count
+
+              merged_errors = {
+                  'metadata': {
+                      'created': datetime.now().isoformat(),
+                      'run_id': timestamp,
+                      'total_errors': len(all_errors),
+                      'error_summary': total_by_type,
+                      'source_files': len(error_files)
+                  },
+                  'errors': all_errors
+              }
+
+              error_output = output_dir / f'search_errors_{timestamp}.json'
+              with open(error_output, 'w') as f:
+                  json.dump(merged_errors, f, indent=2)
+              print(f'Saved merged search errors to: {error_output}')
+              print(f'Error summary: {total_by_type}')
           "
 
       - name: Upload results to dashboard
@@ -112,9 +147,11 @@ jobs:
           DASHBOARD_API_KEY: ${{ secrets.DASHBOARD_API_KEY }}
         run: python upload_results.py
 
-      - name: Upload merged CSV as artifact (backup)
+      - name: Upload merged results as artifact (backup)
         uses: actions/upload-artifact@v4
         with:
           name: solar-leads-${{ github.run_number }}
-          path: output/*.csv
+          path: |
+            output/*.csv
+            output/*.json
           retention-days: 30
