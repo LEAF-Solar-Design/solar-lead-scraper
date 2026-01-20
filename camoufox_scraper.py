@@ -286,9 +286,12 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
                             click_y = box['y'] + (box['height'] / 2)
                             print(f"    [turnstile] Attempt {attempt + 1}: Found widget via {selector}, clicking at ({click_x:.0f}, {click_y:.0f})")
                             await page.mouse.click(click_x, click_y)
-                            await page.wait_for_timeout(3000)
-                            new_content = await page.content()
-                            if "challenge" not in new_content.lower() or "success" in new_content.lower():
+                            await page.wait_for_timeout(5000)
+
+                            # Check if Turnstile is gone (more reliable than text check)
+                            turnstile_count = await page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"], .cf-turnstile').count()
+                            verify_elem = await page.query_selector('text=Verify you are human')
+                            if turnstile_count == 0 and not verify_elem:
                                 print(f"    [turnstile] Challenge solved via widget click on attempt {attempt + 1}")
                                 return True
                             widget_found = True
@@ -317,34 +320,104 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
                                     click_y = box['y'] + (box['height'] / 2)
                                     print(f"    [turnstile] Attempt {attempt + 1}: Found checkbox via {selector}, clicking at ({click_x:.0f}, {click_y:.0f})")
                                     await page.mouse.click(click_x, click_y)
-                                    await page.wait_for_timeout(3000)
-                                    new_content = await page.content()
-                                    if "challenge" not in new_content.lower() or "success" in new_content.lower():
+                                    await page.wait_for_timeout(5000)
+
+                                    # Check if Turnstile is gone
+                                    turnstile_count = await page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"], .cf-turnstile').count()
+                                    verify_elem = await page.query_selector('text=Verify you are human')
+                                    if turnstile_count == 0 and not verify_elem:
                                         print(f"    [turnstile] Challenge solved via checkbox click on attempt {attempt + 1}")
                                         return True
                                     break
                         except Exception:
                             continue
 
-                    # Ultimate fallback: find any clickable element with "verify" text
+                    # Ultimate fallback: find the Turnstile widget and click the checkbox
+                    # The Turnstile widget has a checkbox on the left side within the widget box
                     try:
-                        verify_elem = await page.query_selector('text=Verify you are human')
-                        if verify_elem:
-                            # The checkbox is usually to the left of this text
-                            box = await verify_elem.bounding_box()
-                            if box:
-                                # Click to the left of the text where checkbox would be
-                                click_x = box['x'] - 20
-                                click_y = box['y'] + (box['height'] / 2)
-                                print(f"    [turnstile] Attempt {attempt + 1}: Clicking left of 'Verify' text at ({click_x:.0f}, {click_y:.0f})")
-                                await page.mouse.click(click_x, click_y)
-                                await page.wait_for_timeout(3000)
-                                new_content = await page.content()
-                                if "challenge" not in new_content.lower() or "success" in new_content.lower():
-                                    print(f"    [turnstile] Challenge solved via text-adjacent click on attempt {attempt + 1}")
-                                    return True
-                    except Exception:
-                        pass
+                        # Use JavaScript to find the Turnstile widget checkbox precisely
+                        # The checkbox is inside a label element within the widget
+                        widget_info = await page.evaluate("""
+                            () => {
+                                // Look for the Turnstile checkbox - it's typically in a label with specific structure
+                                // Method 1: Find by the checkbox input directly
+                                const checkbox = document.querySelector('input[type="checkbox"][name*="cf"], input[type="checkbox"][id*="cf"]');
+                                if (checkbox) {
+                                    const rect = checkbox.getBoundingClientRect();
+                                    if (rect.width > 0 && rect.height > 0) {
+                                        return { x: rect.x + rect.width/2, y: rect.y + rect.height/2, method: 'checkbox' };
+                                    }
+                                }
+
+                                // Method 2: Find the label element containing the checkbox visual
+                                // Cloudflare Turnstile uses a custom-styled checkbox
+                                const labels = document.querySelectorAll('label');
+                                for (const label of labels) {
+                                    const text = label.innerText || '';
+                                    if (text.includes('Verify you are human')) {
+                                        const rect = label.getBoundingClientRect();
+                                        // Checkbox is at the left edge of the label, about 15-20px in
+                                        return { x: rect.x + 18, y: rect.y + rect.height/2, method: 'label' };
+                                    }
+                                }
+
+                                // Method 3: Find the widget container with specific dimensions
+                                // Turnstile widget is typically ~300x65 pixels
+                                const divs = document.querySelectorAll('div');
+                                for (const div of divs) {
+                                    const rect = div.getBoundingClientRect();
+                                    const style = window.getComputedStyle(div);
+                                    // Look for widget-like dimensions with border/background
+                                    if (rect.width > 180 && rect.width < 400 &&
+                                        rect.height > 40 && rect.height < 100 &&
+                                        (style.border || style.backgroundColor !== 'rgba(0, 0, 0, 0)')) {
+                                        const text = div.innerText || '';
+                                        if (text.includes('Verify') && text.includes('human')) {
+                                            // Found the widget, checkbox is ~15-20px from left edge
+                                            return { x: rect.x + 18, y: rect.y + rect.height/2, method: 'widget-div', width: rect.width, height: rect.height };
+                                        }
+                                    }
+                                }
+
+                                // Method 4: Find any element with exact "Verify you are human" text (not the instruction text above)
+                                const allElements = document.querySelectorAll('*');
+                                for (const el of allElements) {
+                                    // Use textContent to avoid matching partial text
+                                    const text = el.textContent || '';
+                                    const directText = el.childNodes.length === 1 && el.childNodes[0].nodeType === 3 ? el.childNodes[0].textContent : '';
+                                    if (directText && directText.trim() === 'Verify you are human') {
+                                        const rect = el.getBoundingClientRect();
+                                        // For a text-only element, the checkbox should be to its left
+                                        // Get parent rect for more context
+                                        const parentRect = el.parentElement ? el.parentElement.getBoundingClientRect() : rect;
+                                        return { x: parentRect.x + 18, y: rect.y + rect.height/2, method: 'exact-text' };
+                                    }
+                                }
+
+                                return null;
+                            }
+                        """)
+
+                        if widget_info:
+                            click_x = widget_info['x']
+                            click_y = widget_info['y']
+                            method = widget_info.get('method', 'unknown')
+                            print(f"    [turnstile] Attempt {attempt + 1}: Found widget via {method}, clicking at ({click_x:.0f}, {click_y:.0f})")
+                            await page.mouse.click(click_x, click_y)
+                            await page.wait_for_timeout(5000)
+
+                            # Check if challenge was solved
+                            verify_gone = await page.query_selector('label:has-text("Verify you are human")') is None
+                            url_changed = page.url != initial_url
+
+                            if verify_gone or url_changed:
+                                print(f"    [turnstile] Challenge solved via {method} click on attempt {attempt + 1}")
+                                return True
+                        else:
+                            print(f"    [turnstile] Attempt {attempt + 1}: Could not locate Turnstile widget via JS")
+
+                    except Exception as e:
+                        print(f"    [turnstile] Widget click error: {str(e)[:50]}")
 
                 print(f"    [turnstile] Attempt {attempt + 1}: No challenge iframe or widget found")
                 await page.wait_for_timeout(1000)
@@ -498,11 +571,31 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
             # Check for and attempt to solve Cloudflare Turnstile challenge (only on first page typically)
             if page_num == 1:
                 content = await page.content()
-                if "challenge" in content.lower() or "verify" in content.lower():
+                # Check for Turnstile challenge - look for actual challenge elements, not just text
+                has_turnstile = await page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"], .cf-turnstile, [data-turnstile]').count() > 0
+                has_verify_text = "verify you are human" in content.lower()
+
+                if has_turnstile or has_verify_text:
                     print(f"  [ziprecruiter] Cloudflare challenge detected, attempting to solve...")
                     solved = await solve_cloudflare_turnstile(page)
                     if solved:
+                        # After solving Turnstile, we need to wait for the page to actually load results
+                        # Sometimes ZipRecruiter redirects, sometimes it shows results on same page
                         await page.wait_for_timeout(3000)
+
+                        # Check if we now have job cards - if not, try reloading the page
+                        job_card_check = await page.locator('article[id^="job-card-"], article[data-testid="job-card"]').count()
+                        if job_card_check == 0:
+                            print(f"  [ziprecruiter] No job cards after Turnstile, reloading page...")
+                            await page.reload(wait_until="domcontentloaded")
+                            await page.wait_for_timeout(3000)
+
+                            # Check for Turnstile again after reload
+                            has_turnstile_again = await page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"], .cf-turnstile').count() > 0
+                            if has_turnstile_again:
+                                print(f"  [ziprecruiter] Turnstile reappeared after reload, solving again...")
+                                await solve_cloudflare_turnstile(page)
+                                await page.wait_for_timeout(3000)
                     else:
                         if debug_dir:
                             safe_term = search_term.replace(' ', '_')[:20]
@@ -560,10 +653,16 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
                             except Exception as e:
                                 print(f"  [ziprecruiter] Failed to save screenshot: {e}")
 
-                        if "challenge" in content.lower() or "cloudflare" in content.lower():
-                            print(f"  [ziprecruiter] Cloudflare challenge detected for '{search_term}'")
+                        # Check for actual Turnstile elements, not just text containing "challenge"
+                        has_turnstile = await page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"], .cf-turnstile, [data-turnstile]').count() > 0
+                        has_verify = "verify you are human" in content.lower()
+
+                        if has_turnstile or has_verify:
+                            print(f"  [ziprecruiter] Cloudflare Turnstile still present for '{search_term}'")
                         elif "captcha" in content.lower():
                             print(f"  [ziprecruiter] CAPTCHA detected for '{search_term}'")
+                        elif "blocked" in content.lower() or "access denied" in content.lower():
+                            print(f"  [ziprecruiter] Access blocked for '{search_term}'")
                         else:
                             print(f"  [ziprecruiter] No job cards found for '{search_term}' (title: {title[:50]})")
                             for test_sel in ['article', 'div[class*="job"]', 'li', 'a[href*="job"]']:
