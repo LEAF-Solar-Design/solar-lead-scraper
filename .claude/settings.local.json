@@ -5,7 +5,10 @@
       "Skill(gsd:map-codebase:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git push:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)"
     ]
   }
 }
