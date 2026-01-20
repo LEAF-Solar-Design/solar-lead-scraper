@@ -54,37 +54,83 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
     Returns:
         True if challenge was solved, False otherwise
     """
+    # Multiple iframe URL patterns that Cloudflare Turnstile may use
+    iframe_patterns = [
+        'iframe[src*="challenges.cloudflare.com"]',
+        'iframe[src*="cloudflare.com/cdn-cgi"]',
+        'iframe[src*="turnstile"]',
+        'iframe[title*="Cloudflare"]',
+        'iframe[title*="challenge"]',
+        '.cf-turnstile iframe',
+        '[data-turnstile] iframe',
+        'div[class*="turnstile"] iframe',
+    ]
+
     for attempt in range(max_attempts):
         # Wait for potential iframe to load
         await page.wait_for_timeout(2000)
 
         # Check if we're on a Cloudflare challenge page
         content = await page.content()
-        if "challenge" not in content.lower() and "turnstile" not in content.lower():
+        if "challenge" not in content.lower() and "turnstile" not in content.lower() and "verify" not in content.lower():
             # No challenge present, we're good
             return True
 
-        # Look for Cloudflare challenge iframe
-        frames = page.frames
-        challenge_frame = None
-
-        for frame in frames:
-            frame_url = frame.url
-            if "challenges.cloudflare.com" in frame_url:
-                challenge_frame = frame
-                break
-
-        if not challenge_frame:
-            # No challenge iframe found - might be a different type of challenge
-            print(f"    [turnstile] Attempt {attempt + 1}: No challenge iframe found")
-            await page.wait_for_timeout(1000)
-            continue
-
         try:
-            # Find the iframe element to get its bounding box
-            iframe_element = await page.query_selector('iframe[src*="challenges.cloudflare.com"]')
+            # Try each iframe selector pattern
+            iframe_element = None
+            matched_selector = None
+
+            for selector in iframe_patterns:
+                iframe_element = await page.query_selector(selector)
+                if iframe_element:
+                    matched_selector = selector
+                    break
+
+            # If no iframe found, try finding any iframe and check its attributes
             if not iframe_element:
-                print(f"    [turnstile] Attempt {attempt + 1}: Could not find iframe element")
+                all_iframes = await page.query_selector_all('iframe')
+                if all_iframes:
+                    print(f"    [turnstile] Attempt {attempt + 1}: Found {len(all_iframes)} iframe(s), checking attributes...")
+                    for idx, iframe in enumerate(all_iframes):
+                        src = await iframe.get_attribute('src') or ''
+                        title = await iframe.get_attribute('title') or ''
+                        name = await iframe.get_attribute('name') or ''
+                        print(f"      iframe[{idx}]: src={src[:80]}... title={title} name={name}")
+                        # Check if this looks like a Turnstile iframe
+                        if 'cloudflare' in src.lower() or 'turnstile' in src.lower() or 'challenge' in title.lower():
+                            iframe_element = iframe
+                            matched_selector = f"iframe[{idx}] (dynamic match)"
+                            break
+
+            if not iframe_element:
+                # Last resort: try to find the widget container and click directly on it
+                widget_selectors = [
+                    '.cf-turnstile',
+                    '[data-turnstile-widget]',
+                    'div[class*="turnstile"]',
+                    'div[id*="turnstile"]',
+                    'input[type="checkbox"][name*="cf"]',
+                ]
+                for selector in widget_selectors:
+                    widget = await page.query_selector(selector)
+                    if widget:
+                        box = await widget.bounding_box()
+                        if box:
+                            # Click near the left side where checkbox typically is
+                            click_x = box['x'] + 30
+                            click_y = box['y'] + (box['height'] / 2)
+                            print(f"    [turnstile] Attempt {attempt + 1}: Found widget via {selector}, clicking at ({click_x:.0f}, {click_y:.0f})")
+                            await page.mouse.click(click_x, click_y)
+                            await page.wait_for_timeout(3000)
+                            new_content = await page.content()
+                            if "challenge" not in new_content.lower() or "success" in new_content.lower():
+                                print(f"    [turnstile] Challenge solved via widget click on attempt {attempt + 1}")
+                                return True
+                            break
+
+                print(f"    [turnstile] Attempt {attempt + 1}: No challenge iframe or widget found")
+                await page.wait_for_timeout(1000)
                 continue
 
             # Get bounding box of the iframe
@@ -98,7 +144,7 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
             click_x = box['x'] + (box['width'] / 9)
             click_y = box['y'] + (box['height'] / 2)
 
-            print(f"    [turnstile] Attempt {attempt + 1}: Clicking at ({click_x:.0f}, {click_y:.0f})")
+            print(f"    [turnstile] Attempt {attempt + 1}: Found via {matched_selector}, clicking at ({click_x:.0f}, {click_y:.0f})")
 
             # Click with human-like delay
             await page.mouse.click(click_x, click_y)
