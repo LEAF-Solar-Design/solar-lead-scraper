@@ -11,7 +11,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # Kill hung jobs - normal runtime is ~25 min
+    timeout-minutes: 180  # Kill hung jobs - quadrupled from 45 min
     strategy:
       matrix:
         batch: [0, 1, 2, 3]  # 4 parallel runners, each with different IP
@@ -42,7 +42,7 @@ jobs:
       - name: Run scraper (batch ${{ matrix.batch }})
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 40
+          timeout_minutes: 160
           max_attempts: 3
           retry_wait_seconds: 30
           command: python scraper.py
