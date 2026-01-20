@@ -104,7 +104,7 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
                             break
 
             if not iframe_element:
-                # Last resort: try to find the widget container and click directly on it
+                # Try to find the widget container and click directly on it
                 widget_selectors = [
                     '.cf-turnstile',
                     '[data-turnstile-widget]',
@@ -112,6 +112,7 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
                     'div[id*="turnstile"]',
                     'input[type="checkbox"][name*="cf"]',
                 ]
+                widget_found = False
                 for selector in widget_selectors:
                     widget = await page.query_selector(selector)
                     if widget:
@@ -127,7 +128,60 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
                             if "challenge" not in new_content.lower() or "success" in new_content.lower():
                                 print(f"    [turnstile] Challenge solved via widget click on attempt {attempt + 1}")
                                 return True
+                            widget_found = True
                             break
+
+                if not widget_found:
+                    # Last resort: Look for the Cloudflare managed challenge checkbox
+                    # These are full-page challenges with a visible checkbox, not embedded widgets
+                    checkbox_selectors = [
+                        'input[type="checkbox"]',  # Generic checkbox
+                        'label:has-text("Verify")',
+                        'label:has-text("human")',
+                        '#challenge-form input',
+                        '.challenge-form input',
+                        '[class*="checkbox"]',
+                        'span[class*="mark"]',  # Checkbox visual indicator
+                    ]
+
+                    for selector in checkbox_selectors:
+                        try:
+                            checkbox = await page.query_selector(selector)
+                            if checkbox:
+                                box = await checkbox.bounding_box()
+                                if box:
+                                    click_x = box['x'] + (box['width'] / 2)
+                                    click_y = box['y'] + (box['height'] / 2)
+                                    print(f"    [turnstile] Attempt {attempt + 1}: Found checkbox via {selector}, clicking at ({click_x:.0f}, {click_y:.0f})")
+                                    await page.mouse.click(click_x, click_y)
+                                    await page.wait_for_timeout(3000)
+                                    new_content = await page.content()
+                                    if "challenge" not in new_content.lower() or "success" in new_content.lower():
+                                        print(f"    [turnstile] Challenge solved via checkbox click on attempt {attempt + 1}")
+                                        return True
+                                    break
+                        except Exception:
+                            continue
+
+                    # Ultimate fallback: find any clickable element with "verify" text
+                    try:
+                        verify_elem = await page.query_selector('text=Verify you are human')
+                        if verify_elem:
+                            # The checkbox is usually to the left of this text
+                            box = await verify_elem.bounding_box()
+                            if box:
+                                # Click to the left of the text where checkbox would be
+                                click_x = box['x'] - 20
+                                click_y = box['y'] + (box['height'] / 2)
+                                print(f"    [turnstile] Attempt {attempt + 1}: Clicking left of 'Verify' text at ({click_x:.0f}, {click_y:.0f})")
+                                await page.mouse.click(click_x, click_y)
+                                await page.wait_for_timeout(3000)
+                                new_content = await page.content()
+                                if "challenge" not in new_content.lower() or "success" in new_content.lower():
+                                    print(f"    [turnstile] Challenge solved via text-adjacent click on attempt {attempt + 1}")
+                                    return True
+                    except Exception:
+                        pass
 
                 print(f"    [turnstile] Attempt {attempt + 1}: No challenge iframe or widget found")
                 await page.wait_for_timeout(1000)
