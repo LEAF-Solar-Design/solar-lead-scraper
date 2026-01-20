@@ -66,15 +66,27 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
         'div[class*="turnstile"] iframe',
     ]
 
+    initial_url = page.url
+
     for attempt in range(max_attempts):
         # Wait for potential iframe to load
         await page.wait_for_timeout(2000)
 
-        # Check if we're on a Cloudflare challenge page
-        content = await page.content()
-        if "challenge" not in content.lower() and "turnstile" not in content.lower() and "verify" not in content.lower():
-            # No challenge present, we're good
+        # Check if URL has changed (redirected after solving)
+        if page.url != initial_url and "challenge" not in page.url.lower():
+            print(f"    [turnstile] URL changed to {page.url[:60]}... - challenge solved")
             return True
+
+        # Check if we're on a Cloudflare challenge page by looking for specific elements
+        # Don't just check for "challenge" text as it may appear in JS/footer even after solving
+        challenge_indicators = await page.query_selector_all('text=Verify you are human, text=checking your browser, text=needs to review')
+        if not challenge_indicators:
+            # Also check for the checkbox widget itself
+            checkbox_present = await page.query_selector('input[type="checkbox"]:not([style*="display: none"])')
+            verify_text = await page.query_selector('text=Verify you are human')
+            if not checkbox_present and not verify_text:
+                # No visible challenge elements, we're good
+                return True
 
         try:
             # Try each iframe selector pattern
@@ -203,13 +215,18 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
             # Click with human-like delay
             await page.mouse.click(click_x, click_y)
 
-            # Wait for challenge to process
-            await page.wait_for_timeout(3000)
+            # Wait for challenge to process - need longer wait for Cloudflare verification
+            await page.wait_for_timeout(5000)
 
-            # Check if challenge was solved (page should redirect or content should change)
-            new_content = await page.content()
-            if "challenge" not in new_content.lower() or "success" in new_content.lower():
-                print(f"    [turnstile] Challenge solved on attempt {attempt + 1}")
+            # Check if challenge was solved - prefer URL change detection
+            if page.url != initial_url and "challenge" not in page.url.lower():
+                print(f"    [turnstile] Challenge solved on attempt {attempt + 1} (URL changed)")
+                return True
+
+            # Check if the verify text/checkbox disappeared
+            verify_text = await page.query_selector('text=Verify you are human')
+            if not verify_text:
+                print(f"    [turnstile] Challenge solved on attempt {attempt + 1} (verify element gone)")
                 return True
 
         except Exception as e:
