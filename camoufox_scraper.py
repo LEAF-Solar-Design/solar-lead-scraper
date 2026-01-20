@@ -104,6 +104,7 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
                 all_iframes = await page.query_selector_all('iframe')
                 if all_iframes:
                     print(f"    [turnstile] Attempt {attempt + 1}: Found {len(all_iframes)} iframe(s), checking attributes...")
+                    candidate_iframes = []
                     for idx, iframe in enumerate(all_iframes):
                         src = await iframe.get_attribute('src') or ''
                         title = await iframe.get_attribute('title') or ''
@@ -112,8 +113,22 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
                         # Check if this looks like a Turnstile iframe
                         if 'cloudflare' in src.lower() or 'turnstile' in src.lower() or 'challenge' in title.lower():
                             iframe_element = iframe
-                            matched_selector = f"iframe[{idx}] (dynamic match)"
+                            matched_selector = f"iframe[{idx}] (cloudflare match)"
                             break
+                        # Also consider iframes with empty/blob src as potential Turnstile (they often load dynamically)
+                        # Skip known non-Turnstile iframes like Google Sign-in
+                        if 'google' not in src.lower() and 'facebook' not in src.lower():
+                            if not src or src.startswith('blob:') or src == 'about:blank':
+                                candidate_iframes.append((idx, iframe))
+
+                    # If no explicit cloudflare match, try candidate iframes with empty src
+                    if not iframe_element and candidate_iframes:
+                        for idx, iframe in candidate_iframes:
+                            box = await iframe.bounding_box()
+                            if box and box['width'] > 50 and box['height'] > 30:  # Reasonable size for Turnstile widget
+                                iframe_element = iframe
+                                matched_selector = f"iframe[{idx}] (empty-src candidate, {box['width']:.0f}x{box['height']:.0f})"
+                                break
 
             if not iframe_element:
                 # Try to find the widget container and click directly on it
