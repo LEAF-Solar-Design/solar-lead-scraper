@@ -11,6 +11,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 45  # Kill hung jobs - normal runtime is ~25 min
     strategy:
       matrix:
         batch: [0, 1, 2, 3]  # 4 parallel runners, each with different IP
@@ -39,6 +40,12 @@ jobs:
           echo "Camoufox browser downloaded successfully"
 
       - name: Run scraper (batch ${{ matrix.batch }})
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 40
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: python scraper.py
         env:
           SCRAPER_PROXIES: ${{ secrets.SCRAPER_PROXIES }}
           SCRAPER_BATCH: ${{ matrix.batch }}
@@ -48,7 +55,6 @@ jobs:
           ENABLE_BROWSER_SCRAPING: "1"
           # Enable debug screenshots to diagnose selector issues
           CAMOUFOX_DEBUG: "1"
-        run: python scraper.py
 
       - name: Upload batch results
         uses: actions/upload-artifact@v4
