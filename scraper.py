@@ -909,6 +909,8 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                         "results_wanted": results_per_term,
                         "country_indeed": "USA",
                         "user_agent": current_ua,
+                        # Fetch full job descriptions for LinkedIn (required for filtering)
+                        "linkedin_fetch_description": True,
                     }
                     if proxies:
                         scrape_kwargs["proxies"] = proxies
