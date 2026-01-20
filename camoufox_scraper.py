@@ -43,52 +43,63 @@ class BrowserSearchError:
 async def dismiss_popups(page) -> None:
     """Dismiss common popup dialogs that may block interaction with the page.
 
-    This includes Google Sign-in dialogs, cookie consent banners, etc.
+    This includes Google Sign-in dialogs, cookie consent banners, email signup modals, etc.
     """
-    # Selectors for common popup close buttons/dismiss actions
-    popup_dismiss_selectors = [
-        # Google Sign-in dialog close button
-        'div[aria-label="Close"]',
-        'button[aria-label="Close"]',
-        '[data-dismiss="modal"]',
-        # Google One-Tap close
-        '#credential_picker_container iframe',  # The Google iframe itself - we'll handle specially
-        # Generic close buttons
+    # First, try pressing Escape multiple times which dismisses most modals
+    for _ in range(3):
+        try:
+            await page.keyboard.press('Escape')
+            await page.wait_for_timeout(200)
+        except Exception:
+            pass
+
+    await page.wait_for_timeout(500)
+
+    # Check if there's still a visible modal and try clicking outside it
+    # This works for most overlay-style modals
+    try:
+        modal = await page.query_selector('[role="dialog"], [class*="modal" i], [class*="overlay" i]')
+        if modal and await modal.is_visible():
+            print(f"    [popup] Modal still visible, clicking outside to dismiss...")
+            # Click in the far corner which should be on the backdrop
+            await page.mouse.click(5, 5)
+            await page.wait_for_timeout(500)
+
+            # Also try escape again
+            await page.keyboard.press('Escape')
+            await page.wait_for_timeout(500)
+    except Exception:
+        pass
+
+    # Try specific close button selectors
+    close_selectors = [
+        'button[aria-label*="close" i]',
+        'button[aria-label*="dismiss" i]',
+        '[class*="close" i]:not(input)',
+        'button:has-text("×")',
         'button:has-text("Close")',
         'button:has-text("No thanks")',
-        'button:has-text("Not now")',
-        'a:has-text("Close")',
-        # Cookie consent
-        'button:has-text("Accept")',
-        'button:has-text("Accept All")',
-        'button:has-text("I Accept")',
-        'button[id*="accept"]',
-        # Overlay/modal close
-        '.modal-close',
-        '.popup-close',
-        '[class*="close-button"]',
-        '[class*="dismiss"]',
+        'button:has-text("Skip")',
     ]
 
-    for selector in popup_dismiss_selectors:
+    for selector in close_selectors:
         try:
             element = await page.query_selector(selector)
-            if element:
-                # Check if it's visible
-                is_visible = await element.is_visible()
-                if is_visible:
-                    await element.click()
-                    await page.wait_for_timeout(500)
-                    print(f"    [popup] Dismissed popup via {selector}")
+            if element and await element.is_visible():
+                await element.click()
+                await page.wait_for_timeout(500)
+                print(f"    [popup] Clicked {selector}")
+                # Check if modal is gone
+                modal = await page.query_selector('[role="dialog"]:visible')
+                if not modal:
+                    return
         except Exception:
             continue
 
-    # Special handling for Google Sign-in iframe - try clicking outside it to dismiss
+    # Special handling for Google Sign-in iframe
     try:
         google_iframe = await page.query_selector('iframe[src*="accounts.google.com"]')
         if google_iframe:
-            # Click somewhere outside the iframe to potentially dismiss it
-            # Or press Escape key
             await page.keyboard.press('Escape')
             await page.wait_for_timeout(500)
             print(f"    [popup] Pressed Escape to dismiss Google Sign-in")
@@ -345,18 +356,42 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
                 print(f"  [ziprecruiter] Could not solve Cloudflare challenge for '{search_term}'")
                 return jobs
 
-        # Wait for job cards to appear
-        try:
-            await page.wait_for_selector('article.job_result', timeout=15000)
-        except Exception:
-            # Debug: capture page title and check for Cloudflare
+        # Dismiss any popups (email signup modal, etc.) that may block job listings
+        await dismiss_popups(page)
+
+        # Wait for job cards to appear - try multiple selector patterns
+        # ZipRecruiter's HTML structure changes periodically
+        job_card_selectors = [
+            'article[id^="job-card-"]',  # Current structure as of 2024: article elements with id="job-card-XXX"
+            'article[data-testid="job-card"]',
+            'div[data-testid="job-card"]',
+            'article.job_result',  # Legacy selector
+            '.job_result_item',
+            '.job-listing',
+            'div[class*="JobCard"]',
+            'li[class*="job"]',
+        ]
+
+        job_cards_found = False
+        matched_selector = None
+
+        for selector in job_card_selectors:
+            try:
+                count = await page.locator(selector).count()
+                if count > 0:
+                    matched_selector = selector
+                    job_cards_found = True
+                    print(f"  [ziprecruiter] Found {count} job cards via '{selector}'")
+                    break
+            except Exception:
+                continue
+
+        if not job_cards_found:
+            # Save debug screenshot and log info
             try:
                 title = await page.title()
-                url = page.url
-                # Check for Cloudflare challenge indicators
                 content = await page.content()
 
-                # Save debug screenshot if debug_dir provided
                 if debug_dir:
                     safe_term = search_term.replace(' ', '_')[:20]
                     screenshot_path = f"{debug_dir}/ziprecruiter_{safe_term}.png"
@@ -372,41 +407,119 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
                     print(f"  [ziprecruiter] CAPTCHA detected for '{search_term}'")
                 else:
                     print(f"  [ziprecruiter] No job cards found for '{search_term}' (title: {title[:50]})")
+                    # Debug: print available element types
+                    for test_sel in ['article', 'div[class*="job"]', 'li', 'a[href*="job"]']:
+                        try:
+                            count = await page.locator(test_sel).count()
+                            if count > 0:
+                                print(f"    Debug: Found {count} '{test_sel}' elements")
+                        except Exception:
+                            pass
             except Exception:
                 print(f"  [ziprecruiter] No job cards found for '{search_term}'")
             return jobs
 
-        # Get job cards using Playwright locators
-        job_cards = await page.locator('article.job_result').all()
+        # Get job cards using the matched selector
+        job_cards = await page.locator(matched_selector).all()
 
         for card in job_cards[:50]:  # Limit to 50 per search
             try:
-                title_el = card.locator('h2.job_title a')
-                company_el = card.locator('a.company_name')
-                location_el = card.locator('span.job_location')
-                snippet_el = card.locator('p.job_snippet')
+                # Title is inside h2 element (current ZipRecruiter structure)
+                # Note: The title is inside a button, not a link - so we just extract text
+                title = ""
+                link = ""
+                for title_sel in ['h2', 'a[data-testid="job-card-title"]', 'h2 a', '.job_title a']:
+                    title_el = card.locator(title_sel)
+                    if await title_el.count() > 0:
+                        title = await title_el.first.inner_text()
+                        # Try to get href if it's a link
+                        try:
+                            link = await title_el.first.get_attribute('href') or ""
+                        except Exception:
+                            pass
+                        break
 
-                title = await title_el.inner_text() if await title_el.count() > 0 else ""
-                company = await company_el.inner_text() if await company_el.count() > 0 else ""
-                loc = await location_el.inner_text() if await location_el.count() > 0 else ""
-                snippet = await snippet_el.inner_text() if await snippet_el.count() > 0 else ""
-                link = await title_el.get_attribute('href') if await title_el.count() > 0 else ""
+                # Company: data-testid="job-card-company"
+                company = ""
+                company_link = ""
+                for company_sel in ['a[data-testid="job-card-company"]', 'a[data-testid="employer-name"]', 'a.company_name']:
+                    company_el = card.locator(company_sel)
+                    if await company_el.count() > 0:
+                        company = await company_el.first.inner_text()
+                        try:
+                            company_link = await company_el.first.get_attribute('href') or ""
+                        except Exception:
+                            pass
+                        break
+
+                # Location: data-testid="job-card-location"
+                loc = ""
+                for loc_sel in ['a[data-testid="job-card-location"]', 'p[data-testid="job-card-location"]', 'span.job_location']:
+                    loc_el = card.locator(loc_sel)
+                    if await loc_el.count() > 0:
+                        loc = await loc_el.first.inner_text()
+                        break
+
+                # For the job URL, if no direct link, construct from card ID
+                if not link:
+                    try:
+                        card_id = await card.get_attribute('id')
+                        if card_id and card_id.startswith('job-card-'):
+                            job_id = card_id.replace('job-card-', '')
+                            link = f"https://www.ziprecruiter.com/jobs/{job_id}"
+                    except Exception:
+                        pass
 
                 if title and company:
                     jobs.append({
                         "title": title.strip(),
                         "company": company.strip(),
-                        "location": loc.strip(),
-                        "description": snippet.strip(),
-                        "job_url": link.strip() if link else "",
+                        "location": loc.strip() if loc else "",
+                        "description": "",  # Description not shown in card list
+                        "job_url": link,
                         "date_posted": "",
                         "salary": "",
                         "job_type": "",
                         "search_term": search_term,
                         "source_site": "ziprecruiter"
                     })
-            except Exception:
+            except Exception as e:
                 continue
+
+        # If no jobs found with card selectors, try extracting from job links directly
+        if not jobs:
+            print(f"  [ziprecruiter] Trying fallback link extraction...")
+            try:
+                # Look for job links in the sidebar/list
+                job_links = await page.locator('a[href*="/job/"], a[href*="/jobs/"]').all()
+                seen_titles = set()
+                for link_el in job_links[:50]:
+                    try:
+                        href = await link_el.get_attribute('href') or ""
+                        text = await link_el.inner_text()
+                        if text and text.strip() and len(text.strip()) > 5 and text.strip() not in seen_titles:
+                            # Skip navigation/filter links
+                            if any(skip in text.lower() for skip in ['search', 'filter', 'sort', 'page', 'next', 'prev']):
+                                continue
+                            seen_titles.add(text.strip())
+                            jobs.append({
+                                "title": text.strip(),
+                                "company": "",  # Not available from link alone
+                                "location": "",
+                                "description": "",
+                                "job_url": href,
+                                "date_posted": "",
+                                "salary": "",
+                                "job_type": "",
+                                "search_term": search_term,
+                                "source_site": "ziprecruiter"
+                            })
+                    except Exception:
+                        continue
+                if jobs:
+                    print(f"  [ziprecruiter] Extracted {len(jobs)} jobs from links")
+            except Exception as e:
+                print(f"  [ziprecruiter] Link extraction failed: {str(e)[:50]}")
 
     except Exception as e:
         print(f"  [ziprecruiter] Error parsing page: {str(e)[:100]}")
@@ -432,25 +545,35 @@ async def scrape_glassdoor_page(browser, search_term: str, location: str = "Unit
         # Wait for initial page load
         await page.wait_for_timeout(3000)
 
-        # Check for and attempt to solve Cloudflare Turnstile challenge
-        content = await page.content()
-        if "challenge" in content.lower() or "verify" in content.lower():
-            print(f"  [glassdoor] Cloudflare challenge detected, attempting to solve...")
-            solved = await solve_cloudflare_turnstile(page)
-            if solved:
-                # Wait for redirect after solving
-                await page.wait_for_timeout(3000)
-            else:
-                # Save screenshot of failed challenge
-                if debug_dir:
-                    safe_term = search_term.replace(' ', '_')[:20]
-                    screenshot_path = f"{debug_dir}/glassdoor_{safe_term}_challenge.png"
-                    try:
-                        await page.screenshot(path=screenshot_path, full_page=True)
-                    except Exception:
-                        pass
-                print(f"  [glassdoor] Could not solve Cloudflare challenge for '{search_term}'")
-                return jobs
+        # Dismiss any popups first (Google Sign-in, email signup, etc.)
+        await dismiss_popups(page)
+
+        # Check if job listings are already visible - if so, skip challenge detection
+        job_listings_present = await page.locator('[data-test="jobListing"]').count() > 0
+
+        if not job_listings_present:
+            # Check for Cloudflare challenge by looking for actual challenge elements
+            # Don't just search for keywords in content as they can appear in JS/footer
+            challenge_indicators = await page.query_selector_all('text=Verify you are human, text=checking your browser, input[type="checkbox"]')
+            turnstile_iframe = await page.query_selector('iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"]')
+
+            if challenge_indicators or turnstile_iframe:
+                print(f"  [glassdoor] Cloudflare challenge detected, attempting to solve...")
+                solved = await solve_cloudflare_turnstile(page)
+                if solved:
+                    # Wait for redirect after solving
+                    await page.wait_for_timeout(3000)
+                else:
+                    # Save screenshot of failed challenge
+                    if debug_dir:
+                        safe_term = search_term.replace(' ', '_')[:20]
+                        screenshot_path = f"{debug_dir}/glassdoor_{safe_term}_challenge.png"
+                        try:
+                            await page.screenshot(path=screenshot_path, full_page=True)
+                        except Exception:
+                            pass
+                    print(f"  [glassdoor] Could not solve Cloudflare challenge for '{search_term}'")
+                    return jobs
 
         # Wait for job listings to appear
         try:
@@ -486,26 +609,44 @@ async def scrape_glassdoor_page(browser, search_term: str, location: str = "Unit
 
         for card in job_cards[:50]:  # Limit to 50 per search
             try:
-                title_el = card.locator('[data-test="job-title"]')
-                company_el = card.locator('[data-test="employer-name"]')
-                location_el = card.locator('[data-test="emp-location"]')
+                # Title: a[data-test="job-title"]
+                title = ""
+                link = ""
+                title_el = card.locator('a[data-test="job-title"]')
+                if await title_el.count() > 0:
+                    title = await title_el.first.inner_text()
+                    link = await title_el.first.get_attribute('href') or ""
 
-                title = await title_el.inner_text() if await title_el.count() > 0 else ""
-                company = await company_el.inner_text() if await company_el.count() > 0 else ""
-                loc = await location_el.inner_text() if await location_el.count() > 0 else ""
+                # Company: The employer name is in a span with class containing "compactEmployerName"
+                # There's no data-test="employer-name" attribute
+                company = ""
+                for company_sel in ['span[class*="compactEmployerName"]', '[data-test="employer-name"]', 'span[class*="EmployerName"]']:
+                    company_el = card.locator(company_sel)
+                    if await company_el.count() > 0:
+                        company = await company_el.first.inner_text()
+                        break
 
-                link_el = card.locator('a').first
-                link = await link_el.get_attribute('href') if await link_el.count() > 0 else ""
+                # Location: div[data-test="emp-location"]
+                loc = ""
+                loc_el = card.locator('[data-test="emp-location"]')
+                if await loc_el.count() > 0:
+                    loc = await loc_el.first.inner_text()
+
+                # Salary (bonus): div[data-test="detailSalary"]
+                salary = ""
+                salary_el = card.locator('[data-test="detailSalary"]')
+                if await salary_el.count() > 0:
+                    salary = await salary_el.first.inner_text()
 
                 if title and company:
                     jobs.append({
                         "title": title.strip(),
                         "company": company.strip(),
-                        "location": loc.strip(),
+                        "location": loc.strip() if loc else "",
                         "description": "",  # Glassdoor doesn't show snippet in search results
-                        "job_url": link.strip() if link else "",
+                        "job_url": link,
                         "date_posted": "",
-                        "salary": "",
+                        "salary": salary.strip() if salary else "",
                         "job_type": "",
                         "search_term": search_term,
                         "source_site": "glassdoor"
