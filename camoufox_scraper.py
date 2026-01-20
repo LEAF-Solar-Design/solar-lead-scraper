@@ -40,6 +40,62 @@ class BrowserSearchError:
         }
 
 
+async def dismiss_popups(page) -> None:
+    """Dismiss common popup dialogs that may block interaction with the page.
+
+    This includes Google Sign-in dialogs, cookie consent banners, etc.
+    """
+    # Selectors for common popup close buttons/dismiss actions
+    popup_dismiss_selectors = [
+        # Google Sign-in dialog close button
+        'div[aria-label="Close"]',
+        'button[aria-label="Close"]',
+        '[data-dismiss="modal"]',
+        # Google One-Tap close
+        '#credential_picker_container iframe',  # The Google iframe itself - we'll handle specially
+        # Generic close buttons
+        'button:has-text("Close")',
+        'button:has-text("No thanks")',
+        'button:has-text("Not now")',
+        'a:has-text("Close")',
+        # Cookie consent
+        'button:has-text("Accept")',
+        'button:has-text("Accept All")',
+        'button:has-text("I Accept")',
+        'button[id*="accept"]',
+        # Overlay/modal close
+        '.modal-close',
+        '.popup-close',
+        '[class*="close-button"]',
+        '[class*="dismiss"]',
+    ]
+
+    for selector in popup_dismiss_selectors:
+        try:
+            element = await page.query_selector(selector)
+            if element:
+                # Check if it's visible
+                is_visible = await element.is_visible()
+                if is_visible:
+                    await element.click()
+                    await page.wait_for_timeout(500)
+                    print(f"    [popup] Dismissed popup via {selector}")
+        except Exception:
+            continue
+
+    # Special handling for Google Sign-in iframe - try clicking outside it to dismiss
+    try:
+        google_iframe = await page.query_selector('iframe[src*="accounts.google.com"]')
+        if google_iframe:
+            # Click somewhere outside the iframe to potentially dismiss it
+            # Or press Escape key
+            await page.keyboard.press('Escape')
+            await page.wait_for_timeout(500)
+            print(f"    [popup] Pressed Escape to dismiss Google Sign-in")
+    except Exception:
+        pass
+
+
 async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
     """
     Attempt to solve Cloudflare Turnstile challenge by clicking the checkbox.
@@ -54,6 +110,9 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
     Returns:
         True if challenge was solved, False otherwise
     """
+    # First, try to dismiss any popups (Google Sign-in, etc.) that may block the challenge
+    await dismiss_popups(page)
+
     # Multiple iframe URL patterns that Cloudflare Turnstile may use
     iframe_patterns = [
         'iframe[src*="challenges.cloudflare.com"]',
