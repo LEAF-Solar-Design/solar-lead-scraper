@@ -276,6 +276,89 @@ jobs:
               print(f'Saved merged run stats to: {stats_output}')
               print(f'Search terms: {completed_search_terms}/{total_search_terms}')
               print(f'Jobs: {total_jobs_raw} raw -> {total_jobs_filtered} filtered')
+
+          # Find and merge all deep analytics JSON files
+          analytics_files = list(Path('batches').glob('**/deep_analytics_*.json'))
+          print(f'Found {len(analytics_files)} deep analytics files')
+
+          if analytics_files:
+              all_raw_attempts = []
+              batches_processed = []
+
+              for filepath in analytics_files:
+                  with open(filepath) as f:
+                      data = json.load(f)
+                  all_raw_attempts.extend(data.get('raw_attempts', []))
+                  if data.get('metadata', {}).get('batch') is not None:
+                      batches_processed.append(data['metadata']['batch'])
+
+              # Compute site summaries
+              site_data = {}
+              for attempt in all_raw_attempts:
+                  site = attempt.get('site', 'unknown')
+                  if site not in site_data:
+                      site_data[site] = {
+                          'total_attempts': 0, 'successful_attempts': 0, 'total_jobs': 0,
+                          'total_duration_ms': 0, 'errors_by_type': {},
+                          'cloudflare_encounters': 0, 'cloudflare_solved': 0
+                      }
+                  s = site_data[site]
+                  s['total_attempts'] += 1
+                  s['total_duration_ms'] += attempt.get('duration_ms', 0)
+                  if attempt.get('success'):
+                      s['successful_attempts'] += 1
+                      s['total_jobs'] += attempt.get('jobs_found', 0)
+                  if attempt.get('error_type'):
+                      err_type = attempt['error_type']
+                      s['errors_by_type'][err_type] = s['errors_by_type'].get(err_type, 0) + 1
+                  if attempt.get('cloudflare_detected'):
+                      s['cloudflare_encounters'] += 1
+                      if attempt.get('cloudflare_solved') is True:
+                          s['cloudflare_solved'] += 1
+
+              for site, s in site_data.items():
+                  s['success_rate'] = round(s['successful_attempts'] / s['total_attempts'] * 100, 1) if s['total_attempts'] > 0 else 0
+                  s['avg_duration_ms'] = round(s['total_duration_ms'] / s['total_attempts']) if s['total_attempts'] > 0 else 0
+                  s['avg_jobs_per_success'] = round(s['total_jobs'] / s['successful_attempts'], 1) if s['successful_attempts'] > 0 else 0
+
+              # Error analysis
+              errors = [a for a in all_raw_attempts if not a.get('success')]
+              error_by_type = {}
+              for e in errors:
+                  err_type = e.get('error_type', 'unknown')
+                  error_by_type[err_type] = error_by_type.get(err_type, 0) + 1
+
+              # Cloudflare analysis
+              cf_attempts = [a for a in all_raw_attempts if a.get('cloudflare_detected')]
+              cf_analysis = {
+                  'total_encounters': len(cf_attempts),
+                  'solved': sum(1 for a in cf_attempts if a.get('cloudflare_solved') is True),
+                  'failed': sum(1 for a in cf_attempts if a.get('cloudflare_solved') is False)
+              }
+              if cf_attempts:
+                  cf_analysis['solve_rate'] = round(cf_analysis['solved'] / len(cf_attempts) * 100, 1)
+
+              merged_analytics = {
+                  'metadata': {
+                      'merged_at': datetime.now().isoformat(),
+                      'batches_processed': sorted(batches_processed) if batches_processed else None,
+                      'total_search_attempts': len(all_raw_attempts)
+                  },
+                  'site_summaries': site_data,
+                  'error_analysis': {'total_errors': len(errors), 'by_type': error_by_type},
+                  'cloudflare_analysis': cf_analysis,
+                  'raw_attempts': all_raw_attempts
+              }
+
+              analytics_output = output_dir / f'deep_analytics_{timestamp}.json'
+              with open(analytics_output, 'w') as f:
+                  json.dump(merged_analytics, f, indent=2)
+              print(f'Saved merged deep analytics to: {analytics_output}')
+              print(f'Total search attempts: {len(all_raw_attempts)}')
+              for site, s in site_data.items():
+                  print(f'  {site}: {s[\"success_rate\"]}% success, {s[\"total_jobs\"]} jobs, {s[\"avg_duration_ms\"]}ms avg')
+              if cf_analysis['total_encounters'] > 0:
+                  print(f'Cloudflare: {cf_analysis[\"solved\"]}/{cf_analysis[\"total_encounters\"]} solved')
           "
 
       - name: Upload results to dashboard

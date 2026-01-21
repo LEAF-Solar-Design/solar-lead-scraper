@@ -199,6 +199,265 @@ class ScoringResult:
 
 
 @dataclass
+class SearchAttempt:
+    """Record of a single search attempt with detailed diagnostics.
+
+    Attributes:
+        search_term: The search term used
+        site: Which site was queried
+        timestamp: When the attempt was made
+        success: Whether it succeeded
+        jobs_found: Number of jobs returned
+        duration_ms: How long the request took
+        http_status: HTTP status code (if available)
+        error_type: Type of error (if failed)
+        error_message: Error details (if failed)
+        retry_count: Which retry attempt this was
+        selectors_tried: For browser scraping - which selectors were tried
+        selector_matched: Which selector found results
+        cloudflare_detected: Whether Cloudflare challenge was present
+        cloudflare_solved: Whether challenge was solved
+        page_title: Page title (useful for diagnosing blocks)
+        response_size_bytes: Size of response
+    """
+    search_term: str
+    site: str
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    success: bool = False
+    jobs_found: int = 0
+    duration_ms: int = 0
+    http_status: int | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    retry_count: int = 0
+    selectors_tried: list[str] = field(default_factory=list)
+    selector_matched: str | None = None
+    cloudflare_detected: bool = False
+    cloudflare_solved: bool | None = None
+    page_title: str | None = None
+    response_size_bytes: int | None = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON export."""
+        return {
+            "search_term": self.search_term,
+            "site": self.site,
+            "timestamp": self.timestamp,
+            "success": self.success,
+            "jobs_found": self.jobs_found,
+            "duration_ms": self.duration_ms,
+            "http_status": self.http_status,
+            "error_type": self.error_type,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+            "selectors_tried": self.selectors_tried if self.selectors_tried else None,
+            "selector_matched": self.selector_matched,
+            "cloudflare_detected": self.cloudflare_detected,
+            "cloudflare_solved": self.cloudflare_solved,
+            "page_title": self.page_title,
+            "response_size_bytes": self.response_size_bytes,
+        }
+
+
+@dataclass
+class DeepAnalytics:
+    """Deep diagnostic analytics for debugging scraper issues.
+
+    Tracks detailed per-search-term, per-site metrics to help diagnose
+    issues with LinkedIn, Indeed, ZipRecruiter, and Glassdoor scraping.
+
+    Attributes:
+        run_id: Unique identifier for this run
+        batch: Batch number if running in parallel
+        search_attempts: List of all search attempts with full details
+        site_summaries: Aggregated stats per site
+        search_term_performance: Success rate per search term
+        timing_stats: Request timing distribution
+        cloudflare_stats: Cloudflare challenge encounter/solve rates
+        selector_stats: Which selectors are working for browser scraping
+    """
+    run_id: str
+    batch: int | None = None
+    search_attempts: list[SearchAttempt] = field(default_factory=list)
+
+    def record_attempt(self, attempt: SearchAttempt) -> None:
+        """Record a search attempt."""
+        self.search_attempts.append(attempt)
+
+    def get_site_summary(self) -> dict[str, dict]:
+        """Get aggregated statistics per site."""
+        site_data = {}
+        for attempt in self.search_attempts:
+            site = attempt.site
+            if site not in site_data:
+                site_data[site] = {
+                    "total_attempts": 0,
+                    "successful_attempts": 0,
+                    "total_jobs": 0,
+                    "total_duration_ms": 0,
+                    "errors_by_type": {},
+                    "cloudflare_encounters": 0,
+                    "cloudflare_solved": 0,
+                    "cloudflare_failed": 0,
+                    "http_status_codes": {},
+                    "selectors_used": {},
+                    "avg_jobs_per_success": 0,
+                    "avg_duration_ms": 0,
+                    "success_rate": 0,
+                }
+            s = site_data[site]
+            s["total_attempts"] += 1
+            s["total_duration_ms"] += attempt.duration_ms
+            if attempt.success:
+                s["successful_attempts"] += 1
+                s["total_jobs"] += attempt.jobs_found
+            if attempt.error_type:
+                s["errors_by_type"][attempt.error_type] = s["errors_by_type"].get(attempt.error_type, 0) + 1
+            if attempt.cloudflare_detected:
+                s["cloudflare_encounters"] += 1
+                if attempt.cloudflare_solved is True:
+                    s["cloudflare_solved"] += 1
+                elif attempt.cloudflare_solved is False:
+                    s["cloudflare_failed"] += 1
+            if attempt.http_status:
+                status_str = str(attempt.http_status)
+                s["http_status_codes"][status_str] = s["http_status_codes"].get(status_str, 0) + 1
+            if attempt.selector_matched:
+                s["selectors_used"][attempt.selector_matched] = s["selectors_used"].get(attempt.selector_matched, 0) + 1
+
+        # Calculate derived metrics
+        for site, s in site_data.items():
+            if s["total_attempts"] > 0:
+                s["success_rate"] = round(s["successful_attempts"] / s["total_attempts"] * 100, 1)
+                s["avg_duration_ms"] = round(s["total_duration_ms"] / s["total_attempts"])
+            if s["successful_attempts"] > 0:
+                s["avg_jobs_per_success"] = round(s["total_jobs"] / s["successful_attempts"], 1)
+
+        return site_data
+
+    def get_search_term_performance(self) -> dict[str, dict]:
+        """Get success rate breakdown per search term."""
+        term_data = {}
+        for attempt in self.search_attempts:
+            term = attempt.search_term
+            if term not in term_data:
+                term_data[term] = {
+                    "total_attempts": 0,
+                    "successful_attempts": 0,
+                    "total_jobs": 0,
+                    "sites_tried": set(),
+                    "sites_successful": set(),
+                    "sites_failed": set(),
+                }
+            t = term_data[term]
+            t["total_attempts"] += 1
+            t["sites_tried"].add(attempt.site)
+            if attempt.success:
+                t["successful_attempts"] += 1
+                t["total_jobs"] += attempt.jobs_found
+                t["sites_successful"].add(attempt.site)
+            else:
+                t["sites_failed"].add(attempt.site)
+
+        # Convert sets to lists and add derived metrics
+        for term, t in term_data.items():
+            t["sites_tried"] = sorted(t["sites_tried"])
+            t["sites_successful"] = sorted(t["sites_successful"])
+            t["sites_failed"] = sorted(t["sites_failed"])
+            t["success_rate"] = round(t["successful_attempts"] / t["total_attempts"] * 100, 1) if t["total_attempts"] > 0 else 0
+
+        return term_data
+
+    def get_timing_distribution(self) -> dict:
+        """Get timing statistics for successful requests."""
+        durations = [a.duration_ms for a in self.search_attempts if a.success and a.duration_ms > 0]
+        if not durations:
+            return {"count": 0}
+
+        durations.sort()
+        return {
+            "count": len(durations),
+            "min_ms": min(durations),
+            "max_ms": max(durations),
+            "avg_ms": round(sum(durations) / len(durations)),
+            "p50_ms": durations[len(durations) // 2],
+            "p90_ms": durations[int(len(durations) * 0.9)] if len(durations) >= 10 else durations[-1],
+            "p99_ms": durations[int(len(durations) * 0.99)] if len(durations) >= 100 else durations[-1],
+        }
+
+    def get_error_analysis(self) -> dict:
+        """Analyze error patterns."""
+        errors = [a for a in self.search_attempts if not a.success]
+        if not errors:
+            return {"total_errors": 0}
+
+        by_type = {}
+        by_site = {}
+        error_messages = {}
+
+        for e in errors:
+            # By type
+            err_type = e.error_type or "unknown"
+            by_type[err_type] = by_type.get(err_type, 0) + 1
+
+            # By site
+            site = e.site
+            if site not in by_site:
+                by_site[site] = {"count": 0, "types": {}}
+            by_site[site]["count"] += 1
+            by_site[site]["types"][err_type] = by_site[site]["types"].get(err_type, 0) + 1
+
+            # Collect unique error messages (truncated)
+            if e.error_message:
+                msg = e.error_message[:100]
+                error_messages[msg] = error_messages.get(msg, 0) + 1
+
+        return {
+            "total_errors": len(errors),
+            "by_type": by_type,
+            "by_site": by_site,
+            "top_error_messages": dict(sorted(error_messages.items(), key=lambda x: -x[1])[:10]),
+        }
+
+    def get_cloudflare_analysis(self) -> dict:
+        """Analyze Cloudflare challenge handling."""
+        cf_attempts = [a for a in self.search_attempts if a.cloudflare_detected]
+        if not cf_attempts:
+            return {"total_encounters": 0}
+
+        return {
+            "total_encounters": len(cf_attempts),
+            "solved": sum(1 for a in cf_attempts if a.cloudflare_solved is True),
+            "failed": sum(1 for a in cf_attempts if a.cloudflare_solved is False),
+            "solve_rate": round(sum(1 for a in cf_attempts if a.cloudflare_solved is True) / len(cf_attempts) * 100, 1),
+            "by_site": {
+                site: {
+                    "encounters": sum(1 for a in cf_attempts if a.site == site),
+                    "solved": sum(1 for a in cf_attempts if a.site == site and a.cloudflare_solved is True),
+                }
+                for site in set(a.site for a in cf_attempts)
+            },
+        }
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON export."""
+        return {
+            "metadata": {
+                "run_id": self.run_id,
+                "batch": self.batch,
+                "generated_at": datetime.now().isoformat(),
+                "total_search_attempts": len(self.search_attempts),
+            },
+            "site_summaries": self.get_site_summary(),
+            "search_term_performance": self.get_search_term_performance(),
+            "timing_distribution": self.get_timing_distribution(),
+            "error_analysis": self.get_error_analysis(),
+            "cloudflare_analysis": self.get_cloudflare_analysis(),
+            "raw_attempts": [a.to_dict() for a in self.search_attempts],
+        }
+
+
+@dataclass
 class FilterStats:
     """Statistics collected during a filter run.
 
@@ -707,7 +966,7 @@ def classify_error(error: Exception) -> str:
     return "unknown"
 
 
-def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: str | None = None) -> tuple[pd.DataFrame, FilterStats, list[dict], dict, list[SearchError], ScrapeStats]:
+def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: str | None = None) -> tuple[pd.DataFrame, FilterStats, list[dict], dict, list[SearchError], ScrapeStats, DeepAnalytics]:
     """Scrape solar design/CAD jobs from multiple sources.
 
     Args:
@@ -724,6 +983,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         - dict mapping row indices to ScoringResult for confidence calculation
         - list of SearchError objects for failed searches
         - ScrapeStats with scraping statistics
+        - DeepAnalytics with detailed per-search diagnostic data
     """
 
     # Wide net search - generic role names that our filter will narrow down
@@ -842,6 +1102,9 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         search_terms_total=len(search_terms)
     )
 
+    # Initialize deep analytics tracking
+    deep_analytics = DeepAnalytics(run_id=run_id, batch=batch)
+
     all_jobs = []
     search_errors = []  # Track all search failures
     results_per_term = 1000  # Wide net, filter does the work
@@ -901,6 +1164,14 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
             scrape_stats.record_site_attempt(site)
 
             for attempt in range(2):  # 2 retries per site (less aggressive)
+                # Track timing for deep analytics
+                attempt_start = time.time()
+                search_attempt = SearchAttempt(
+                    search_term=term,
+                    site=site,
+                    retry_count=attempt,
+                )
+
                 try:
                     scrape_kwargs = {
                         "site_name": [site],
@@ -916,6 +1187,13 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                         scrape_kwargs["proxies"] = proxies
 
                     jobs = scrape_jobs(**scrape_kwargs)
+
+                    # Record success in deep analytics
+                    search_attempt.duration_ms = int((time.time() - attempt_start) * 1000)
+                    search_attempt.success = True
+                    search_attempt.jobs_found = len(jobs) if not jobs.empty else 0
+                    deep_analytics.record_attempt(search_attempt)
+
                     if not jobs.empty:
                         jobs['search_term'] = term
                         jobs['source_site'] = site
@@ -931,6 +1209,19 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                 except Exception as e:
                     site_error = e
                     error_type = classify_error(e)
+
+                    # Record failure in deep analytics
+                    search_attempt.duration_ms = int((time.time() - attempt_start) * 1000)
+                    search_attempt.success = False
+                    search_attempt.error_type = error_type
+                    search_attempt.error_message = str(e)[:500]
+                    # Check for cloudflare indicators in error
+                    error_lower = str(e).lower()
+                    if "cloudflare" in error_lower or "403" in error_lower or "captcha" in error_lower:
+                        search_attempt.cloudflare_detected = True
+                        search_attempt.cloudflare_solved = False
+                    deep_analytics.record_attempt(search_attempt)
+
                     print(f"  [{site}] Attempt {attempt + 1} failed ({error_type}): {str(e)[:100]}")
 
                     # If blocked/403, mark site as blocked for this run
@@ -994,7 +1285,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         try:
             from camoufox_scraper import run_camoufox_scraper
             print("\n--- Camoufox Browser Scraping (ZipRecruiter, Glassdoor) ---")
-            browser_jobs, browser_errors = run_camoufox_scraper(search_terms)
+            browser_jobs, browser_errors, browser_attempts = run_camoufox_scraper(search_terms)
             if not browser_jobs.empty:
                 all_jobs.append(browser_jobs)
             # Convert browser errors to SearchError format
@@ -1005,6 +1296,23 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                     error_type=err.get("error_type", "unknown"),
                     error_message=err.get("error_message", ""),
                     attempts=1
+                ))
+            # Add browser search attempts to deep analytics
+            for attempt_dict in browser_attempts:
+                deep_analytics.record_attempt(SearchAttempt(
+                    search_term=attempt_dict.get("search_term", ""),
+                    site=attempt_dict.get("site", "browser"),
+                    timestamp=attempt_dict.get("timestamp", ""),
+                    success=attempt_dict.get("success", False),
+                    jobs_found=attempt_dict.get("jobs_found", 0),
+                    duration_ms=attempt_dict.get("duration_ms", 0),
+                    error_type=attempt_dict.get("error_type"),
+                    error_message=attempt_dict.get("error_message"),
+                    selectors_tried=attempt_dict.get("selectors_tried", []),
+                    selector_matched=attempt_dict.get("selector_matched"),
+                    cloudflare_detected=attempt_dict.get("cloudflare_detected", False),
+                    cloudflare_solved=attempt_dict.get("cloudflare_solved"),
+                    page_title=attempt_dict.get("page_title"),
                 ))
         except ImportError:
             print("\nCamoufox scraper not available (camoufox not installed)")
@@ -1017,7 +1325,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
     if not all_jobs:
         print("No jobs found!")
         scrape_stats.finish()
-        return pd.DataFrame(), FilterStats(), [], {}, search_errors, scrape_stats
+        return pd.DataFrame(), FilterStats(), [], {}, search_errors, scrape_stats, deep_analytics
 
     # Combine all results
     df = pd.concat(all_jobs, ignore_index=True)
@@ -1069,7 +1377,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         scrape_stats.total_jobs_filtered = len(df)
 
     scrape_stats.finish()
-    return df, stats, rejected_leads, scoring_results, search_errors, scrape_stats
+    return df, stats, rejected_leads, scoring_results, search_errors, scrape_stats, deep_analytics
 
 
 def export_search_errors(
@@ -1153,6 +1461,35 @@ def export_run_stats(
     filename = f"run_stats_{scrape_stats.run_id}.json"
     if scrape_stats.batch is not None:
         filename = f"run_stats_{scrape_stats.run_id}_batch{scrape_stats.batch}.json"
+
+    filepath = output_dir / filename
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(export_data, f, indent=2)
+
+    return filepath
+
+
+def export_deep_analytics(
+    deep_analytics: DeepAnalytics,
+    output_dir: Path,
+) -> Path:
+    """Export deep analytics to JSON for debugging and diagnostics.
+
+    This export provides detailed per-search-attempt data to help diagnose
+    issues with LinkedIn, Indeed, ZipRecruiter, and Glassdoor scraping.
+
+    Args:
+        deep_analytics: DeepAnalytics object with all search attempts
+        output_dir: Directory to write JSON file
+
+    Returns:
+        Path to the created file
+    """
+    export_data = deep_analytics.to_dict()
+
+    filename = f"deep_analytics_{deep_analytics.run_id}.json"
+    if deep_analytics.batch is not None:
+        filename = f"deep_analytics_{deep_analytics.run_id}_batch{deep_analytics.batch}.json"
 
     filepath = output_dir / filename
     with open(filepath, 'w', encoding='utf-8') as f:
@@ -1266,7 +1603,7 @@ def main():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     # Scrape jobs
-    raw_jobs, stats, rejected_leads, scoring_results, search_errors, scrape_stats = scrape_solar_jobs(
+    raw_jobs, stats, rejected_leads, scoring_results, search_errors, scrape_stats, deep_analytics = scrape_solar_jobs(
         batch=batch, total_batches=total_batches, run_id=timestamp
     )
 
@@ -1274,6 +1611,10 @@ def main():
     if search_errors:
         errors_path = export_search_errors(search_errors, output_dir, timestamp, batch)
         print(f"\nExported {len(search_errors)} search errors to: {errors_path}")
+
+    # Always export deep analytics for diagnostics
+    analytics_path = export_deep_analytics(deep_analytics, output_dir)
+    print(f"Exported deep analytics to: {analytics_path}")
 
     if raw_jobs.empty:
         print("No jobs to process. Exiting.")

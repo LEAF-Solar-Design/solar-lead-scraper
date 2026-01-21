@@ -28,6 +28,11 @@ def get_run_stats_files():
     return glob.glob("output/run_stats_*.json")
 
 
+def get_deep_analytics_files():
+    """Find all deep analytics JSON files in output directory."""
+    return glob.glob("output/deep_analytics_*.json")
+
+
 def upload_to_dashboard(csv_path: str):
     """Upload CSV to the dashboard API."""
     dashboard_url = os.environ.get("DASHBOARD_URL")
@@ -124,6 +129,186 @@ def upload_search_errors(error_data: dict):
         print(f"Search error upload failed: {response.status_code}")
         print(response.text)
         # Don't raise - search error upload is not critical
+
+
+def merge_deep_analytics(analytics_files: list[str]) -> dict:
+    """Merge multiple deep analytics files into a single comprehensive report.
+
+    Combines analytics from parallel batch runs to provide unified diagnostic data.
+
+    Args:
+        analytics_files: List of paths to deep analytics JSON files
+
+    Returns:
+        Merged analytics with combined site summaries, error analysis, etc.
+    """
+    if not analytics_files:
+        return {}
+
+    # Collect all raw attempts across batches
+    all_raw_attempts = []
+    batches_processed = []
+    start_times = []
+
+    for filepath in analytics_files:
+        with open(filepath, "r") as f:
+            data = json.load(f)
+
+        all_raw_attempts.extend(data.get("raw_attempts", []))
+
+        metadata = data.get("metadata", {})
+        if metadata.get("batch") is not None:
+            batches_processed.append(metadata["batch"])
+        if metadata.get("generated_at"):
+            start_times.append(metadata["generated_at"])
+
+    # Compute aggregated site summaries
+    site_data = {}
+    for attempt in all_raw_attempts:
+        site = attempt.get("site", "unknown")
+        if site not in site_data:
+            site_data[site] = {
+                "total_attempts": 0,
+                "successful_attempts": 0,
+                "total_jobs": 0,
+                "total_duration_ms": 0,
+                "errors_by_type": {},
+                "cloudflare_encounters": 0,
+                "cloudflare_solved": 0,
+                "cloudflare_failed": 0,
+                "http_status_codes": {},
+                "selectors_used": {},
+            }
+        s = site_data[site]
+        s["total_attempts"] += 1
+        s["total_duration_ms"] += attempt.get("duration_ms", 0)
+        if attempt.get("success"):
+            s["successful_attempts"] += 1
+            s["total_jobs"] += attempt.get("jobs_found", 0)
+        if attempt.get("error_type"):
+            err_type = attempt["error_type"]
+            s["errors_by_type"][err_type] = s["errors_by_type"].get(err_type, 0) + 1
+        if attempt.get("cloudflare_detected"):
+            s["cloudflare_encounters"] += 1
+            if attempt.get("cloudflare_solved") is True:
+                s["cloudflare_solved"] += 1
+            elif attempt.get("cloudflare_solved") is False:
+                s["cloudflare_failed"] += 1
+        if attempt.get("http_status"):
+            status_str = str(attempt["http_status"])
+            s["http_status_codes"][status_str] = s["http_status_codes"].get(status_str, 0) + 1
+        if attempt.get("selector_matched"):
+            sel = attempt["selector_matched"]
+            s["selectors_used"][sel] = s["selectors_used"].get(sel, 0) + 1
+
+    # Calculate derived metrics
+    for site, s in site_data.items():
+        if s["total_attempts"] > 0:
+            s["success_rate"] = round(s["successful_attempts"] / s["total_attempts"] * 100, 1)
+            s["avg_duration_ms"] = round(s["total_duration_ms"] / s["total_attempts"])
+        else:
+            s["success_rate"] = 0
+            s["avg_duration_ms"] = 0
+        if s["successful_attempts"] > 0:
+            s["avg_jobs_per_success"] = round(s["total_jobs"] / s["successful_attempts"], 1)
+        else:
+            s["avg_jobs_per_success"] = 0
+
+    # Compute search term performance
+    term_data = {}
+    for attempt in all_raw_attempts:
+        term = attempt.get("search_term", "")
+        if term not in term_data:
+            term_data[term] = {
+                "total_attempts": 0,
+                "successful_attempts": 0,
+                "total_jobs": 0,
+                "sites_successful": [],
+                "sites_failed": [],
+            }
+        t = term_data[term]
+        t["total_attempts"] += 1
+        if attempt.get("success"):
+            t["successful_attempts"] += 1
+            t["total_jobs"] += attempt.get("jobs_found", 0)
+            if attempt.get("site") and attempt["site"] not in t["sites_successful"]:
+                t["sites_successful"].append(attempt["site"])
+        else:
+            if attempt.get("site") and attempt["site"] not in t["sites_failed"]:
+                t["sites_failed"].append(attempt["site"])
+
+    for term, t in term_data.items():
+        t["success_rate"] = round(t["successful_attempts"] / t["total_attempts"] * 100, 1) if t["total_attempts"] > 0 else 0
+
+    # Timing distribution
+    durations = [a.get("duration_ms", 0) for a in all_raw_attempts if a.get("success") and a.get("duration_ms", 0) > 0]
+    if durations:
+        durations.sort()
+        timing_dist = {
+            "count": len(durations),
+            "min_ms": min(durations),
+            "max_ms": max(durations),
+            "avg_ms": round(sum(durations) / len(durations)),
+            "p50_ms": durations[len(durations) // 2],
+            "p90_ms": durations[int(len(durations) * 0.9)] if len(durations) >= 10 else durations[-1],
+        }
+    else:
+        timing_dist = {"count": 0}
+
+    # Error analysis
+    errors = [a for a in all_raw_attempts if not a.get("success")]
+    error_analysis = {"total_errors": len(errors)}
+    if errors:
+        by_type = {}
+        by_site = {}
+        error_messages = {}
+        for e in errors:
+            err_type = e.get("error_type", "unknown")
+            by_type[err_type] = by_type.get(err_type, 0) + 1
+            site = e.get("site", "unknown")
+            if site not in by_site:
+                by_site[site] = {"count": 0, "types": {}}
+            by_site[site]["count"] += 1
+            by_site[site]["types"][err_type] = by_site[site]["types"].get(err_type, 0) + 1
+            if e.get("error_message"):
+                msg = e["error_message"][:100]
+                error_messages[msg] = error_messages.get(msg, 0) + 1
+        error_analysis["by_type"] = by_type
+        error_analysis["by_site"] = by_site
+        error_analysis["top_error_messages"] = dict(sorted(error_messages.items(), key=lambda x: -x[1])[:10])
+
+    # Cloudflare analysis
+    cf_attempts = [a for a in all_raw_attempts if a.get("cloudflare_detected")]
+    if cf_attempts:
+        cf_analysis = {
+            "total_encounters": len(cf_attempts),
+            "solved": sum(1 for a in cf_attempts if a.get("cloudflare_solved") is True),
+            "failed": sum(1 for a in cf_attempts if a.get("cloudflare_solved") is False),
+            "solve_rate": round(sum(1 for a in cf_attempts if a.get("cloudflare_solved") is True) / len(cf_attempts) * 100, 1),
+            "by_site": {},
+        }
+        for site in set(a.get("site") for a in cf_attempts):
+            cf_analysis["by_site"][site] = {
+                "encounters": sum(1 for a in cf_attempts if a.get("site") == site),
+                "solved": sum(1 for a in cf_attempts if a.get("site") == site and a.get("cloudflare_solved") is True),
+            }
+    else:
+        cf_analysis = {"total_encounters": 0}
+
+    return {
+        "metadata": {
+            "merged_at": json.dumps(start_times[0] if start_times else None).strip('"'),
+            "batches_processed": sorted(batches_processed) if batches_processed else None,
+            "total_batches": len(analytics_files),
+            "total_search_attempts": len(all_raw_attempts),
+        },
+        "site_summaries": site_data,
+        "search_term_performance": term_data,
+        "timing_distribution": timing_dist,
+        "error_analysis": error_analysis,
+        "cloudflare_analysis": cf_analysis,
+        "raw_attempts": all_raw_attempts,
+    }
 
 
 def merge_run_stats(stats_files: list[str]) -> dict:
@@ -317,6 +502,56 @@ def upload_run_stats(stats_data: dict):
         # Don't raise - stats upload is not critical
 
 
+def upload_deep_analytics(analytics_data: dict, run_id: str = None):
+    """Upload deep analytics to the dashboard API.
+
+    Args:
+        analytics_data: Merged analytics data from merge_deep_analytics()
+        run_id: Optional run ID to associate with (uses metadata.run_id if not provided)
+    """
+    dashboard_url = os.environ.get("DASHBOARD_URL")
+    api_key = os.environ.get("DASHBOARD_API_KEY")
+
+    if not dashboard_url or not api_key:
+        print("Dashboard credentials not set - skipping deep analytics upload")
+        return
+
+    url = f"{dashboard_url.rstrip('/')}/api/scraper/analytics"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    # Use provided run_id or extract from metadata
+    target_run_id = run_id or analytics_data.get("metadata", {}).get("run_id")
+
+    # Prepare payload
+    payload = {
+        "run_id": target_run_id,
+        "metadata": analytics_data.get("metadata", {}),
+        "site_summaries": analytics_data.get("site_summaries", {}),
+        "search_term_performance": analytics_data.get("search_term_performance", {}),
+        "timing_distribution": analytics_data.get("timing_distribution", {}),
+        "error_analysis": analytics_data.get("error_analysis", {}),
+        "cloudflare_analysis": analytics_data.get("cloudflare_analysis", {}),
+        "raw_attempts": analytics_data.get("raw_attempts", []),
+    }
+
+    print(f"\nUploading deep analytics to {url}")
+    print(f"  Total search attempts: {len(payload.get('raw_attempts', []))}")
+
+    response = requests.post(url, json=payload, headers=headers)
+
+    if response.status_code == 200:
+        result = response.json()
+        print(f"Deep analytics uploaded: {result.get('analytics_id', 'OK')}")
+        return result
+    else:
+        print(f"Deep analytics upload failed: {response.status_code}")
+        print(response.text)
+        # Don't raise - analytics upload is not critical
+
+
 def main():
     # Upload leads CSV
     try:
@@ -344,6 +579,61 @@ def main():
         upload_search_errors(merged_errors)
     else:
         print("\nNo search errors to upload")
+
+    # Merge and save deep analytics (for local diagnostics)
+    analytics_files = get_deep_analytics_files()
+    if analytics_files:
+        print(f"\nFound {len(analytics_files)} deep analytics file(s)")
+        merged_analytics = merge_deep_analytics(analytics_files)
+
+        # Print deep analytics summary
+        print("\n" + "=" * 50)
+        print("DEEP ANALYTICS SUMMARY")
+        print("=" * 50)
+        print(f"Total search attempts: {merged_analytics['metadata']['total_search_attempts']}")
+
+        print("\nPer-site breakdown:")
+        for site_name, site_data in merged_analytics.get("site_summaries", {}).items():
+            cf_info = ""
+            if site_data.get("cloudflare_encounters", 0) > 0:
+                cf_solved = site_data.get("cloudflare_solved", 0)
+                cf_total = site_data["cloudflare_encounters"]
+                cf_info = f" | CF: {cf_solved}/{cf_total} solved"
+            print(f"  {site_name}:")
+            print(f"    Attempts: {site_data['total_attempts']} ({site_data['success_rate']}% success)")
+            print(f"    Jobs: {site_data['total_jobs']} total, {site_data['avg_jobs_per_success']} avg/success")
+            print(f"    Timing: {site_data['avg_duration_ms']}ms avg{cf_info}")
+            if site_data.get("errors_by_type"):
+                print(f"    Errors: {site_data['errors_by_type']}")
+
+        cf_analysis = merged_analytics.get("cloudflare_analysis", {})
+        if cf_analysis.get("total_encounters", 0) > 0:
+            print(f"\nCloudflare challenges: {cf_analysis['total_encounters']} encounters, {cf_analysis['solve_rate']}% solved")
+            for site, cf_site in cf_analysis.get("by_site", {}).items():
+                print(f"  {site}: {cf_site['solved']}/{cf_site['encounters']} solved")
+
+        err_analysis = merged_analytics.get("error_analysis", {})
+        if err_analysis.get("total_errors", 0) > 0:
+            print(f"\nErrors: {err_analysis['total_errors']} total")
+            if err_analysis.get("by_type"):
+                print(f"  By type: {err_analysis['by_type']}")
+
+        print("=" * 50)
+
+        # Upload deep analytics to dashboard
+        upload_deep_analytics(merged_analytics)
+
+        # Save merged analytics to output
+        from datetime import datetime
+        output_dir = "output"
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        analytics_output = f"{output_dir}/deep_analytics_{timestamp}_merged.json"
+        with open(analytics_output, 'w') as f:
+            json.dump(merged_analytics, f, indent=2)
+        print(f"\nSaved merged deep analytics to: {analytics_output}")
+    else:
+        print("\nNo deep analytics to merge")
 
 
 if __name__ == "__main__":

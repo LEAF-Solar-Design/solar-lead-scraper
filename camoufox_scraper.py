@@ -40,6 +40,51 @@ class BrowserSearchError:
         }
 
 
+@dataclass
+class BrowserSearchAttempt:
+    """Detailed record of a browser-based search attempt for deep analytics.
+
+    Captures timing, selector matching, Cloudflare handling, and results
+    to help diagnose issues with ZipRecruiter and Glassdoor scraping.
+    """
+    search_term: str
+    site: str
+    timestamp: str
+    success: bool = False
+    jobs_found: int = 0
+    duration_ms: int = 0
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    selectors_tried: list = None
+    selector_matched: Optional[str] = None
+    cloudflare_detected: bool = False
+    cloudflare_solved: Optional[bool] = None
+    page_title: Optional[str] = None
+    pages_scraped: int = 1
+
+    def __post_init__(self):
+        if self.selectors_tried is None:
+            self.selectors_tried = []
+
+    def to_dict(self) -> dict:
+        return {
+            "search_term": self.search_term,
+            "site": self.site,
+            "timestamp": self.timestamp,
+            "success": self.success,
+            "jobs_found": self.jobs_found,
+            "duration_ms": self.duration_ms,
+            "error_type": self.error_type,
+            "error_message": self.error_message,
+            "selectors_tried": self.selectors_tried if self.selectors_tried else None,
+            "selector_matched": self.selector_matched,
+            "cloudflare_detected": self.cloudflare_detected,
+            "cloudflare_solved": self.cloudflare_solved,
+            "page_title": self.page_title,
+            "pages_scraped": self.pages_scraped,
+        }
+
+
 async def dismiss_popups(page) -> None:
     """Dismiss common popup dialogs that may block interaction with the page.
 
@@ -1140,7 +1185,7 @@ async def scrape_with_camoufox(
     search_terms: list[str],
     sites: list[str] = None,
     debug_screenshots: bool = False
-) -> tuple[pd.DataFrame, list[BrowserSearchError]]:
+) -> tuple[pd.DataFrame, list[BrowserSearchError], list[BrowserSearchAttempt]]:
     """
     Scrape Cloudflare-protected job sites using Camoufox browser.
 
@@ -1150,17 +1195,18 @@ async def scrape_with_camoufox(
         debug_screenshots: If True, save screenshots when no results found (for CI debugging)
 
     Returns:
-        Tuple of (DataFrame of jobs, list of errors)
+        Tuple of (DataFrame of jobs, list of errors, list of search attempts for analytics)
     """
     if not CAMOUFOX_AVAILABLE:
         print("[Camoufox] camoufox not installed - skipping browser-based scraping")
-        return pd.DataFrame(), []
+        return pd.DataFrame(), [], []
 
     if sites is None:
         sites = ['ziprecruiter', 'glassdoor']
 
     all_jobs = []
     errors = []
+    search_attempts = []  # Track detailed analytics for each search
 
     # Set up debug directory if screenshots enabled
     debug_dir = None
@@ -1196,15 +1242,37 @@ async def scrape_with_camoufox(
 
                 # Scrape ZipRecruiter
                 if 'ziprecruiter' in sites:
+                    import time
+                    start_time = time.time()
+                    attempt = BrowserSearchAttempt(
+                        search_term=term,
+                        site="ziprecruiter",
+                        timestamp=datetime.now().isoformat(),
+                    )
                     try:
                         jobs = await scrape_ziprecruiter_page(browser, term, debug_dir=debug_dir)
+                        attempt.duration_ms = int((time.time() - start_time) * 1000)
                         if jobs:
                             all_jobs.extend(jobs)
+                            attempt.success = True
+                            attempt.jobs_found = len(jobs)
                             print(f"  [ziprecruiter] Found {len(jobs)} jobs")
                         else:
+                            # No results is still technically a success (site responded)
+                            attempt.success = True
+                            attempt.jobs_found = 0
                             print(f"  [ziprecruiter] No results")
                     except Exception as e:
+                        attempt.duration_ms = int((time.time() - start_time) * 1000)
                         error_msg = str(e)[:500]
+                        attempt.success = False
+                        attempt.error_type = "browser_error"
+                        attempt.error_message = error_msg
+                        # Check for Cloudflare indicators
+                        error_lower = str(e).lower()
+                        if "cloudflare" in error_lower or "turnstile" in error_lower or "captcha" in error_lower:
+                            attempt.cloudflare_detected = True
+                            attempt.cloudflare_solved = False
                         print(f"  [ziprecruiter] Error: {error_msg[:100]}")
                         errors.append(BrowserSearchError(
                             search_term=term,
@@ -1213,21 +1281,42 @@ async def scrape_with_camoufox(
                             error_message=error_msg,
                             timestamp=datetime.now().isoformat()
                         ))
+                    search_attempts.append(attempt)
 
                 # Small delay between sites
                 await asyncio.sleep(2)
 
                 # Scrape Glassdoor
                 if 'glassdoor' in sites:
+                    import time
+                    start_time = time.time()
+                    attempt = BrowserSearchAttempt(
+                        search_term=term,
+                        site="glassdoor",
+                        timestamp=datetime.now().isoformat(),
+                    )
                     try:
                         jobs = await scrape_glassdoor_page(browser, term, debug_dir=debug_dir)
+                        attempt.duration_ms = int((time.time() - start_time) * 1000)
                         if jobs:
                             all_jobs.extend(jobs)
+                            attempt.success = True
+                            attempt.jobs_found = len(jobs)
                             print(f"  [glassdoor] Found {len(jobs)} jobs")
                         else:
+                            attempt.success = True
+                            attempt.jobs_found = 0
                             print(f"  [glassdoor] No results")
                     except Exception as e:
+                        attempt.duration_ms = int((time.time() - start_time) * 1000)
                         error_msg = str(e)[:500]
+                        attempt.success = False
+                        attempt.error_type = "browser_error"
+                        attempt.error_message = error_msg
+                        error_lower = str(e).lower()
+                        if "cloudflare" in error_lower or "turnstile" in error_lower or "captcha" in error_lower:
+                            attempt.cloudflare_detected = True
+                            attempt.cloudflare_solved = False
                         print(f"  [glassdoor] Error: {error_msg[:100]}")
                         errors.append(BrowserSearchError(
                             search_term=term,
@@ -1236,6 +1325,7 @@ async def scrape_with_camoufox(
                             error_message=error_msg,
                             timestamp=datetime.now().isoformat()
                         ))
+                    search_attempts.append(attempt)
 
                 # Delay between searches to avoid detection
                 if i < len(search_terms) - 1:
@@ -1256,12 +1346,12 @@ async def scrape_with_camoufox(
     if all_jobs:
         df = pd.DataFrame(all_jobs)
         print(f"[Camoufox] Total: {len(df)} jobs from browser scraping")
-        return df, errors
+        return df, errors, search_attempts
 
-    return pd.DataFrame(), errors
+    return pd.DataFrame(), errors, search_attempts
 
 
-def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None, debug_screenshots: bool = None) -> tuple[pd.DataFrame, list[dict]]:
+def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None, debug_screenshots: bool = None) -> tuple[pd.DataFrame, list[dict], list[dict]]:
     """
     Synchronous wrapper for the async Camoufox scraper.
 
@@ -1272,19 +1362,19 @@ def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None, debug
                           If None, auto-detect from CAMOUFOX_DEBUG env var.
 
     Returns:
-        Tuple of (DataFrame of jobs, list of error dicts)
+        Tuple of (DataFrame of jobs, list of error dicts, list of search attempt dicts for analytics)
     """
     if not CAMOUFOX_AVAILABLE:
         print("[Camoufox] camoufox not available - install with: pip install camoufox && camoufox fetch")
-        return pd.DataFrame(), []
+        return pd.DataFrame(), [], []
 
     # Auto-detect debug mode from environment if not specified
     if debug_screenshots is None:
         debug_screenshots = os.environ.get("CAMOUFOX_DEBUG", "0") == "1"
 
     try:
-        df, errors = asyncio.run(scrape_with_camoufox(search_terms, sites, debug_screenshots=debug_screenshots))
-        return df, [e.to_dict() for e in errors]
+        df, errors, search_attempts = asyncio.run(scrape_with_camoufox(search_terms, sites, debug_screenshots=debug_screenshots))
+        return df, [e.to_dict() for e in errors], [a.to_dict() for a in search_attempts]
     except Exception as e:
         print(f"[Camoufox] Error running scraper: {str(e)[:200]}")
         return pd.DataFrame(), [{
@@ -1293,7 +1383,7 @@ def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None, debug
             "error_type": "fatal",
             "error_message": str(e)[:500],
             "timestamp": datetime.now().isoformat()
-        }]
+        }], []
 
 
 async def debug_single_search():

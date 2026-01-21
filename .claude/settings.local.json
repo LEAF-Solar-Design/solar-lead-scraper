@@ -9,7 +9,9 @@
       "Bash(git push:*)",
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(wc:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
