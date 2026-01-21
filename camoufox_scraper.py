@@ -175,14 +175,15 @@ async def dismiss_popups(page) -> None:
 
 async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
     """
-    Attempt to solve Cloudflare Turnstile challenge by clicking the checkbox.
+    Attempt to solve Cloudflare Turnstile challenge.
 
-    The technique locates the Cloudflare challenge iframe and clicks the checkbox
-    at calculated coordinates within the frame.
+    Handles two types of Cloudflare challenges:
+    1. Checkbox challenge: Shows "Verify you are human" with a checkbox to click
+    2. Auto-verification: Shows "Verifying..." while Cloudflare automatically checks
 
     Args:
         page: Playwright page object
-        max_attempts: Maximum number of click attempts
+        max_attempts: Maximum number of attempts
 
     Returns:
         True if challenge was solved, False otherwise
@@ -204,6 +205,44 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
 
     initial_url = page.url
 
+    # First, check if this is an auto-verification challenge ("Verifying...")
+    # These don't require clicking - just waiting for Cloudflare to complete verification
+    content = await page.content()
+    if "verifying..." in content.lower() or "this may take a few seconds" in content.lower():
+        print(f"    [turnstile] Auto-verification detected, waiting for completion...")
+
+        # Wait up to 30 seconds for auto-verification to complete
+        for wait_attempt in range(15):
+            await page.wait_for_timeout(2000)
+
+            # Check if URL changed (redirected to actual content)
+            if page.url != initial_url:
+                print(f"    [turnstile] Auto-verification complete (URL changed)")
+                return True
+
+            # Check if the verifying text is gone
+            new_content = await page.content()
+            if "verifying..." not in new_content.lower():
+                # Check if we now have job content or if challenge cleared
+                has_jobs = await page.locator('article, [class*="job"], [data-test="jobListing"]').count() > 0
+                still_challenging = "verify you are human" in new_content.lower() or "needs to review" in new_content.lower()
+
+                if has_jobs:
+                    print(f"    [turnstile] Auto-verification complete (jobs visible)")
+                    return True
+                elif not still_challenging:
+                    print(f"    [turnstile] Auto-verification complete (challenge cleared)")
+                    return True
+                else:
+                    # Switched from auto-verify to checkbox challenge
+                    print(f"    [turnstile] Auto-verification timed out, falling back to checkbox click")
+                    break
+
+            if wait_attempt % 3 == 0:
+                print(f"    [turnstile] Still verifying... (waited {(wait_attempt + 1) * 2}s)")
+
+        # If we get here, auto-verification may have failed - continue to checkbox logic
+
     for attempt in range(max_attempts):
         # Wait for potential iframe to load
         await page.wait_for_timeout(2000)
@@ -212,6 +251,15 @@ async def solve_cloudflare_turnstile(page, max_attempts: int = 3) -> bool:
         if page.url != initial_url and "challenge" not in page.url.lower():
             print(f"    [turnstile] URL changed to {page.url[:60]}... - challenge solved")
             return True
+
+        # Re-check for auto-verification state (it might have switched)
+        content = await page.content()
+        if "verifying..." in content.lower():
+            print(f"    [turnstile] Attempt {attempt + 1}: Auto-verification in progress, waiting...")
+            await page.wait_for_timeout(5000)
+            if page.url != initial_url:
+                return True
+            continue
 
         # Check if we're on a Cloudflare challenge page by looking for specific elements
         # Don't just check for "challenge" text as it may appear in JS/footer even after solving
