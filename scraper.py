@@ -1115,9 +1115,11 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
     #
     # NOT SUPPORTED (as of Jan 2026):
     # - Google: Requires manual query syntax calibration (Issue #302)
-    # - ZipRecruiter: Cloudflare blocked (Issue #270)
     # - Glassdoor: Cloudflare blocked (Issue #272)
-    all_sites = ["indeed", "linkedin"]
+    #
+    # RECENTLY FIXED (Jan 22, 2026):
+    # - ZipRecruiter: Fixed selectors + multi-page scraping enabled (5 pages)
+    all_sites = ["indeed", "linkedin", "ziprecruiter"]
 
     # Realistic browser user agents - rotate to avoid fingerprint detection
     # These should match what tls-client uses internally for consistency

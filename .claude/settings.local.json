@@ -11,7 +11,12 @@
       "Bash(findstr:*)",
       "Bash(pip show:*)",
       "Bash(wc:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(if [ -d \"output\" ])",
+      "Bash(then ls -la output/)",
+      "Bash(else echo \"No output directory\")",
+      "Bash(fi)",
+      "Bash(gh run list:*)"
     ]
   }
 }

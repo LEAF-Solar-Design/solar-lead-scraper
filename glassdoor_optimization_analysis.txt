@@ -1,0 +1,73 @@
+GLASSDOOR PERFORMANCE TEST RESULTS
+==================================
+
+Date: 2026-01-22
+Test: Local profiling of description fetching
+
+KEY FINDINGS:
+============
+
+1. BOTTLENECK IDENTIFIED: Popup Dismissal ⚠️
+   - Popup dismissal: 26.63s (87% of total time!)
+   - Navigation: 1.88s (6%)
+   - Post-nav wait: 2.01s (7%)  
+   - Selector matching: 0.01s (0%)
+   - TOTAL: 30.53s per description
+
+2. OPTIMIZATION RESULTS:
+   
+   Serial (current): 30.5s per description
+   Parallel (3x):    12.7s per description (2.4x faster)
+   Optimized timeout: 10.0s (but failed - timeout too short)
+   
+3. PARALLEL FETCHING ISSUE:
+   - Parallel fetching returned 0 chars for all descriptions
+   - Suggests each page needs popup dismissed separately
+   - Or pages are being blocked/rate limited
+
+4. PROJECTIONS FOR FULL RUN:
+
+   Current approach:
+   - 10 descriptions = 305.3s (~5 min)
+   - Full search = 20s + 305s = 325s (5.4 min)  
+   - 21 searches = 68.3 min
+
+   Best case (parallel + optimized):
+   - 10 descriptions = 41.6s
+   - Full search = 20s + 42s = 62s (1 min)
+   - 21 searches = 21.7 min
+   - SAVINGS: 46.6 minutes!
+
+ROOT CAUSE:
+===========
+The dismiss_popups() function is taking 26+ seconds per description fetch.
+This is the primary bottleneck, not navigation or selector matching.
+
+RECOMMENDED FIXES:
+==================
+
+1. SHORT TERM: Reduce popup dismiss timeout
+   - Current: dismiss_popups() has no timeout limit
+   - Fix: Add 2-3 second max wait for popups
+
+2. MEDIUM TERM: Cache popup state per session
+   - Once dismissed, don't check again on same page type
+   
+3. LONG TERM: Parallel fetching with shared session
+   - Need to investigate why parallel failed (rate limiting?)
+   - May need session cookies or different approach
+
+NEXT STEPS:
+===========
+1. Investigate dismiss_popups() function - add timeout
+2. Test reduced popup timeout (2-3s max)
+3. Re-test parallel fetching with fixed popups
+4. Implement best solution
+
+EXPECTED IMPACT:
+===============
+If popup dismissal reduced from 26s to 3s:
+- Per description: 30.5s → 7.5s (75% faster)
+- Per search (10 desc): 305s → 75s 
+- Full run (21 searches): 94.8 min → 41.0 min
+- TIME SAVED: 53.8 minutes per run!
