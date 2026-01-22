@@ -704,15 +704,19 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
             await dismiss_popups(page)
 
             # Wait for job cards to appear - try multiple selector patterns
+            # Updated 2026-01-22: ZipRecruiter changed layout - now uses simpler structure
             job_card_selectors = [
-                'article[id^="job-card-"]',
+                'li.job_result',  # NEW: Current ZipRecruiter structure (Jan 2026)
+                'div.job_result',  # Variant of above
+                'li[class*="job"]',  # Generic job list item
+                'div[role="listitem"]',  # Accessibility role
+                'article[id^="job-card-"]',  # OLD: Legacy structure
                 'article[data-testid="job-card"]',
                 'div[data-testid="job-card"]',
                 'article.job_result',
                 '.job_result_item',
                 '.job-listing',
                 'div[class*="JobCard"]',
-                'li[class*="job"]',
             ]
 
             job_cards_found = False
@@ -779,25 +783,30 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
 
             for card in job_cards[:50]:  # Limit to 50 per page
                 try:
-                    # Title is inside h2 element (current ZipRecruiter structure)
-                    # Note: The title is inside a button, not a link - so we just extract text
+                    # Title - Updated selectors for new layout (Jan 2026)
+                    # The title is now inside an h2 or h3, often as a clickable link/button
                     title = ""
                     link = ""
-                    for title_sel in ['h2', 'a[data-testid="job-card-title"]', 'h2 a', '.job_title a']:
+                    for title_sel in ['h2', 'h3', 'h2 a', 'h3 a', 'h2 button', 'a.job_link', 'a[data-testid="job-card-title"]', '.job_title a']:
                         title_el = card.locator(title_sel)
                         if await title_el.count() > 0:
                             title = await title_el.first.inner_text()
                             # Try to get href if it's a link
                             try:
                                 link = await title_el.first.get_attribute('href') or ""
+                                # If no href, try parent link
+                                if not link:
+                                    parent_link = card.locator('a')
+                                    if await parent_link.count() > 0:
+                                        link = await parent_link.first.get_attribute('href') or ""
                             except Exception:
                                 pass
                             break
 
-                    # Company: data-testid="job-card-company"
+                    # Company - Updated selectors for new layout (Jan 2026)
                     company = ""
                     company_link = ""
-                    for company_sel in ['a[data-testid="job-card-company"]', 'a[data-testid="employer-name"]', 'a.company_name']:
+                    for company_sel in ['a.company_name', 'span.company_name', 'a[data-testid="job-card-company"]', 'a[data-testid="employer-name"]', 'div.company', 'p.company']:
                         company_el = card.locator(company_sel)
                         if await company_el.count() > 0:
                             company = await company_el.first.inner_text()
@@ -807,9 +816,9 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
                                 pass
                             break
 
-                    # Location: data-testid="job-card-location"
+                    # Location - Updated selectors for new layout (Jan 2026)
                     loc = ""
-                    for loc_sel in ['a[data-testid="job-card-location"]', 'p[data-testid="job-card-location"]', 'span.job_location']:
+                    for loc_sel in ['p.location', 'span.location', 'div.location', 'a[data-testid="job-card-location"]', 'p[data-testid="job-card-location"]', 'span.job_location']:
                         loc_el = card.locator(loc_sel)
                         if await loc_el.count() > 0:
                             loc = await loc_el.first.inner_text()
@@ -838,7 +847,12 @@ async def scrape_ziprecruiter_page(browser, search_term: str, location: str = "U
                             "search_term": search_term,
                             "source_site": "ziprecruiter"
                         })
+                    elif page_num == 1 and len(jobs) < 3:
+                        # Debug first few cards if not extracting properly
+                        print(f"    Debug: Card extraction failed - title: '{title[:30] if title else 'NONE'}', company: '{company[:30] if company else 'NONE'}'")
                 except Exception as e:
+                    if page_num == 1 and len(jobs) < 3:
+                        print(f"    Debug: Exception extracting card: {str(e)[:100]}")
                     continue
 
             # Report jobs found on this page
