@@ -32,12 +32,37 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Cache Camoufox browser
+        id: cache-camoufox
+        uses: actions/cache@v4
+        with:
+          path: ~/.camoufox
+          key: camoufox-${{ runner.os }}-v1
+
       - name: Set up Camoufox browser
+        if: steps.cache-camoufox.outputs.cache-hit != 'true'
         run: |
           # Download the Camoufox Firefox-based browser binary
           # Camoufox is better for CI - works headless without Xvfb issues
-          camoufox fetch
-          echo "Camoufox browser downloaded successfully"
+          # Only one job will download, others will use cache
+          # Retry with backoff to handle rate limits
+          for i in 1 2 3 4 5; do
+            if camoufox fetch; then
+              echo "Camoufox browser downloaded successfully"
+              break
+            else
+              if [ $i -lt 5 ]; then
+                wait_time=$((i * 30))
+                echo "Download failed, retrying in ${wait_time}s (attempt $i/5)..."
+                sleep $wait_time
+              else
+                echo "Failed to download Camoufox after 5 attempts"
+                exit 1
+              fi
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run scraper (batch ${{ matrix.batch }})
         uses: nick-fields/retry@v3
