@@ -52,39 +52,7 @@ jobs:
 
           # Patch camoufox to use GITHUB_TOKEN (not yet in released version)
           # See: https://github.com/daijro/camoufox/issues/285
-          python - <<'PATCH'
-          import os
-          import site
-
-          # Find camoufox pkgman.py
-          for sp in site.getsitepackages() + [site.getusersitepackages()]:
-              pkgman = os.path.join(sp, 'camoufox', 'pkgman.py')
-              if os.path.exists(pkgman):
-                  with open(pkgman, 'r') as f:
-                      content = f.read()
-
-                  # Check if already patched
-                  if 'GITHUB_TOKEN' in content:
-                      print(f"Already patched: {pkgman}")
-                      break
-
-                  # Add GITHUB_TOKEN support to the headers
-                  old = 'headers = {"Accept": "application/vnd.github.v3+json"}'
-                  new = '''headers = {"Accept": "application/vnd.github.v3+json"}
-        if token := os.environ.get("GITHUB_TOKEN"):
-            headers["Authorization"] = f"Bearer {token}"'''
-
-                  if old in content:
-                      content = content.replace(old, new)
-                      with open(pkgman, 'w') as f:
-                          f.write(content)
-                      print(f"Patched GITHUB_TOKEN support into: {pkgman}")
-                  else:
-                      print(f"Could not find headers line to patch in: {pkgman}")
-                  break
-          else:
-              print("Warning: Could not find camoufox pkgman.py to patch")
-          PATCH
+          python .github/scripts/patch_camoufox.py
 
           # Retry with backoff to handle rate limits
           for i in 1 2 3 4 5; do
