@@ -8,18 +8,30 @@ This module handles ZipRecruiter and Glassdoor which block standard HTTP request
 import asyncio
 import os
 import random
-from dataclasses import dataclass
+import sys
+import traceback
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
 import pandas as pd
 
+# Track import errors for diagnostics
+CAMOUFOX_IMPORT_ERROR = None
+
 # Only import camoufox if available (optional dependency)
 try:
     from camoufox.async_api import AsyncCamoufox
     CAMOUFOX_AVAILABLE = True
-except ImportError:
+    print("[Camoufox] Module imported successfully")
+except ImportError as e:
     CAMOUFOX_AVAILABLE = False
+    CAMOUFOX_IMPORT_ERROR = str(e)
+    print(f"[Camoufox] Import failed: {e}")
+except Exception as e:
+    CAMOUFOX_AVAILABLE = False
+    CAMOUFOX_IMPORT_ERROR = f"Unexpected error: {e}"
+    print(f"[Camoufox] Unexpected import error: {e}")
 
 
 @dataclass
@@ -83,6 +95,52 @@ class BrowserSearchAttempt:
             "cloudflare_solved": self.cloudflare_solved,
             "page_title": self.page_title,
             "pages_scraped": self.pages_scraped,
+        }
+
+
+@dataclass
+class BrowserSessionDiagnostics:
+    """Diagnostics for the entire browser session to help debug CI issues.
+
+    Captures environment info, browser startup, and session-level metrics.
+    """
+    session_id: str
+    started_at: str
+    ended_at: Optional[str] = None
+    platform: str = ""
+    python_version: str = ""
+    camoufox_available: bool = False
+    camoufox_import_error: Optional[str] = None
+    browser_started: bool = False
+    browser_start_error: Optional[str] = None
+    browser_start_traceback: Optional[str] = None
+    headless_mode: str = ""
+    total_searches: int = 0
+    successful_searches: int = 0
+    failed_searches: int = 0
+    total_jobs_found: int = 0
+    sites_attempted: list = field(default_factory=list)
+    environment_vars: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "session_id": self.session_id,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+            "platform": self.platform,
+            "python_version": self.python_version,
+            "camoufox_available": self.camoufox_available,
+            "camoufox_import_error": self.camoufox_import_error,
+            "browser_started": self.browser_started,
+            "browser_start_error": self.browser_start_error,
+            "browser_start_traceback": self.browser_start_traceback,
+            "headless_mode": self.headless_mode,
+            "total_searches": self.total_searches,
+            "successful_searches": self.successful_searches,
+            "failed_searches": self.failed_searches,
+            "total_jobs_found": self.total_jobs_found,
+            "sites_attempted": self.sites_attempted,
+            "environment_vars": self.environment_vars,
         }
 
 
@@ -1184,7 +1242,7 @@ async def scrape_with_camoufox(
     search_terms: list[str],
     sites: list[str] = None,
     debug_screenshots: bool = False
-) -> tuple[pd.DataFrame, list[BrowserSearchError], list[BrowserSearchAttempt]]:
+) -> tuple[pd.DataFrame, list[BrowserSearchError], list[BrowserSearchAttempt], BrowserSessionDiagnostics]:
     """
     Scrape Cloudflare-protected job sites using Camoufox browser.
 
@@ -1194,14 +1252,35 @@ async def scrape_with_camoufox(
         debug_screenshots: If True, save screenshots when no results found (for CI debugging)
 
     Returns:
-        Tuple of (DataFrame of jobs, list of errors, list of search attempts for analytics)
+        Tuple of (DataFrame of jobs, list of errors, list of search attempts, session diagnostics)
     """
+    # Initialize session diagnostics
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    diagnostics = BrowserSessionDiagnostics(
+        session_id=session_id,
+        started_at=datetime.now().isoformat(),
+        platform=f"{os.name} / {sys.platform}",
+        python_version=sys.version,
+        camoufox_available=CAMOUFOX_AVAILABLE,
+        camoufox_import_error=CAMOUFOX_IMPORT_ERROR,
+        environment_vars={
+            "ENABLE_BROWSER_SCRAPING": os.environ.get("ENABLE_BROWSER_SCRAPING", "not set"),
+            "CAMOUFOX_DEBUG": os.environ.get("CAMOUFOX_DEBUG", "not set"),
+            "HOME": os.environ.get("HOME", "not set"),
+            "GITHUB_ACTIONS": os.environ.get("GITHUB_ACTIONS", "not set"),
+        }
+    )
+
     if not CAMOUFOX_AVAILABLE:
         print("[Camoufox] camoufox not installed - skipping browser-based scraping")
-        return pd.DataFrame(), [], []
+        print(f"[Camoufox] Import error was: {CAMOUFOX_IMPORT_ERROR}")
+        diagnostics.ended_at = datetime.now().isoformat()
+        return pd.DataFrame(), [], [], diagnostics
 
     if sites is None:
         sites = ['ziprecruiter', 'glassdoor']
+
+    diagnostics.sites_attempted = sites
 
     all_jobs = []
     errors = []
@@ -1223,8 +1302,10 @@ async def scrape_with_camoufox(
         # headless=True uses standard headless mode
         is_linux = os.name != 'nt'
         headless_mode = "virtual" if is_linux else True
+        diagnostics.headless_mode = str(headless_mode)
 
         print(f"[Camoufox] Platform: {'Linux' if is_linux else 'Windows'}, headless={headless_mode}")
+        print(f"[Camoufox] Environment: GITHUB_ACTIONS={os.environ.get('GITHUB_ACTIONS', 'not set')}")
 
         async with AsyncCamoufox(
             headless=headless_mode,
@@ -1234,7 +1315,9 @@ async def scrape_with_camoufox(
             os="windows" if not is_linux else None,  # Spoof Windows on Linux
             disable_coop=True,  # Allow clicking inside cross-origin iframes (for Turnstile)
         ) as browser:
+            diagnostics.browser_started = True
             print("[Camoufox] Browser started successfully")
+            diagnostics.total_searches = len(search_terms) * len(sites)
 
             for i, term in enumerate(search_terms):
                 print(f"[Camoufox] Searching for: {term} ({i + 1}/{len(search_terms)})")
@@ -1339,7 +1422,11 @@ async def scrape_with_camoufox(
                     await asyncio.sleep(delay)
 
     except Exception as e:
+        error_tb = traceback.format_exc()
         print(f"[Camoufox] Fatal error: {str(e)[:200]}")
+        print(f"[Camoufox] Traceback:\n{error_tb}")
+        diagnostics.browser_start_error = str(e)[:500]
+        diagnostics.browser_start_traceback = error_tb[:2000]
         errors.append(BrowserSearchError(
             search_term="*",
             site="camoufox",
@@ -1348,12 +1435,18 @@ async def scrape_with_camoufox(
             timestamp=datetime.now().isoformat()
         ))
 
+    # Update diagnostics with final counts
+    diagnostics.ended_at = datetime.now().isoformat()
+    diagnostics.successful_searches = sum(1 for a in search_attempts if a.success)
+    diagnostics.failed_searches = sum(1 for a in search_attempts if not a.success)
+    diagnostics.total_jobs_found = len(all_jobs)
+
     if all_jobs:
         df = pd.DataFrame(all_jobs)
         print(f"[Camoufox] Total: {len(df)} jobs from browser scraping")
-        return df, errors, search_attempts
+        return df, errors, search_attempts, diagnostics
 
-    return pd.DataFrame(), errors, search_attempts
+    return pd.DataFrame(), errors, search_attempts, diagnostics
 
 
 def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None, debug_screenshots: bool = None) -> tuple[pd.DataFrame, list[dict], list[dict]]:
@@ -1367,28 +1460,47 @@ def run_camoufox_scraper(search_terms: list[str], sites: list[str] = None, debug
                           If None, auto-detect from CAMOUFOX_DEBUG env var.
 
     Returns:
-        Tuple of (DataFrame of jobs, list of error dicts, list of search attempt dicts for analytics)
+        Tuple of (DataFrame of jobs, list of error dicts, list of search attempt dicts for analytics, diagnostics dict)
     """
+    # Create diagnostics even if camoufox not available
+    base_diagnostics = {
+        "session_id": datetime.now().strftime('%Y%m%d_%H%M%S'),
+        "started_at": datetime.now().isoformat(),
+        "platform": f"{os.name} / {sys.platform}",
+        "python_version": sys.version,
+        "camoufox_available": CAMOUFOX_AVAILABLE,
+        "camoufox_import_error": CAMOUFOX_IMPORT_ERROR,
+    }
+
     if not CAMOUFOX_AVAILABLE:
         print("[Camoufox] camoufox not available - install with: pip install camoufox && camoufox fetch")
-        return pd.DataFrame(), [], []
+        print(f"[Camoufox] Import error: {CAMOUFOX_IMPORT_ERROR}")
+        base_diagnostics["ended_at"] = datetime.now().isoformat()
+        base_diagnostics["browser_started"] = False
+        return pd.DataFrame(), [], [], base_diagnostics
 
     # Auto-detect debug mode from environment if not specified
     if debug_screenshots is None:
         debug_screenshots = os.environ.get("CAMOUFOX_DEBUG", "0") == "1"
 
     try:
-        df, errors, search_attempts = asyncio.run(scrape_with_camoufox(search_terms, sites, debug_screenshots=debug_screenshots))
-        return df, [e.to_dict() for e in errors], [a.to_dict() for a in search_attempts]
+        df, errors, search_attempts, diagnostics = asyncio.run(scrape_with_camoufox(search_terms, sites, debug_screenshots=debug_screenshots))
+        return df, [e.to_dict() for e in errors], [a.to_dict() for a in search_attempts], diagnostics.to_dict()
     except Exception as e:
+        error_tb = traceback.format_exc()
         print(f"[Camoufox] Error running scraper: {str(e)[:200]}")
+        print(f"[Camoufox] Full traceback:\n{error_tb}")
+        base_diagnostics["ended_at"] = datetime.now().isoformat()
+        base_diagnostics["browser_started"] = False
+        base_diagnostics["browser_start_error"] = str(e)[:500]
+        base_diagnostics["browser_start_traceback"] = error_tb[:2000]
         return pd.DataFrame(), [{
             "search_term": "*",
             "site": "camoufox",
             "error_type": "fatal",
             "error_message": str(e)[:500],
             "timestamp": datetime.now().isoformat()
-        }], []
+        }], [], base_diagnostics
 
 
 async def debug_single_search():

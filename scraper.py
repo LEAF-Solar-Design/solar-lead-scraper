@@ -289,14 +289,20 @@ class DeepAnalytics:
         timing_stats: Request timing distribution
         cloudflare_stats: Cloudflare challenge encounter/solve rates
         selector_stats: Which selectors are working for browser scraping
+        browser_sessions: List of browser session diagnostics from camoufox
     """
     run_id: str
     batch: int | None = None
     search_attempts: list[SearchAttempt] = field(default_factory=list)
+    browser_sessions: list[dict] = field(default_factory=list)
 
     def record_attempt(self, attempt: SearchAttempt) -> None:
         """Record a search attempt."""
         self.search_attempts.append(attempt)
+
+    def record_browser_session(self, diagnostics: dict) -> None:
+        """Record browser session diagnostics from camoufox scraper."""
+        self.browser_sessions.append(diagnostics)
 
     def get_site_summary(self) -> dict[str, dict]:
         """Get aggregated statistics per site."""
@@ -461,12 +467,14 @@ class DeepAnalytics:
                 "batch": self.batch,
                 "generated_at": datetime.now().isoformat(),
                 "total_search_attempts": len(self.search_attempts),
+                "browser_sessions_count": len(self.browser_sessions),
             },
             "site_summaries": self.get_site_summary(),
             "search_term_performance": self.get_search_term_performance(),
             "timing_distribution": self.get_timing_distribution(),
             "error_analysis": self.get_error_analysis(),
             "cloudflare_analysis": self.get_cloudflare_analysis(),
+            "browser_sessions": self.browser_sessions,
             "raw_attempts": [a.to_dict() for a in self.search_attempts],
         }
 
@@ -1299,11 +1307,25 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
     # Only runs if ENABLE_BROWSER_SCRAPING=1 and camoufox is available
     if os.environ.get("ENABLE_BROWSER_SCRAPING") == "1":
         try:
-            from camoufox_scraper import run_camoufox_scraper
+            from camoufox_scraper import run_camoufox_scraper, CAMOUFOX_AVAILABLE, CAMOUFOX_IMPORT_ERROR
             print("\n--- Camoufox Browser Scraping (ZipRecruiter, Glassdoor) ---")
-            browser_jobs, browser_errors, browser_attempts = run_camoufox_scraper(search_terms)
+            print(f"  CAMOUFOX_AVAILABLE: {CAMOUFOX_AVAILABLE}")
+            if not CAMOUFOX_AVAILABLE:
+                print(f"  WARNING: Camoufox module loaded but browser not available!")
+                print(f"  Import error: {CAMOUFOX_IMPORT_ERROR}")
+            browser_jobs, browser_errors, browser_attempts, browser_diagnostics = run_camoufox_scraper(search_terms)
+            print(f"  Camoufox returned: {len(browser_jobs)} jobs, {len(browser_errors)} errors, {len(browser_attempts)} attempts")
+            print(f"  Browser diagnostics: started={browser_diagnostics.get('browser_started')}, error={browser_diagnostics.get('browser_start_error', 'none')[:100] if browser_diagnostics.get('browser_start_error') else 'none'}")
             if not browser_jobs.empty:
                 all_jobs.append(browser_jobs)
+                # Update scrape stats for browser-scraped sites
+                for attempt in browser_attempts:
+                    site = attempt.get("site", "browser")
+                    scrape_stats.record_site_attempt(site)
+                    if attempt.get("success"):
+                        scrape_stats.record_site_success(site, attempt.get("jobs_found", 0))
+                    else:
+                        scrape_stats.record_site_error(site)
             # Convert browser errors to SearchError format
             for err in browser_errors:
                 search_errors.append(SearchError(
@@ -1330,11 +1352,19 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                     cloudflare_solved=attempt_dict.get("cloudflare_solved"),
                     page_title=attempt_dict.get("page_title"),
                 ))
-        except ImportError:
+            # Record browser diagnostics in deep analytics
+            if browser_diagnostics:
+                deep_analytics.record_browser_session(browser_diagnostics)
+                print(f"  Recorded browser session diagnostics in deep_analytics")
+        except ImportError as e:
             print("\nCamoufox scraper not available (camoufox not installed)")
+            print(f"Import error: {e}")
             print("Install with: pip install camoufox[geoip] && camoufox fetch")
         except Exception as e:
+            import traceback
             print(f"\nCamoufox browser scraping failed: {str(e)[:200]}")
+            print("Full traceback:")
+            traceback.print_exc()
     else:
         print("\nENABLE_BROWSER_SCRAPING not set - skipping ZipRecruiter/Glassdoor")
 

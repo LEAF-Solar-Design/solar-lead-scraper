@@ -16,7 +16,8 @@
       "Bash(then ls -la output/)",
       "Bash(else echo \"No output directory\")",
       "Bash(fi)",
-      "Bash(gh run list:*)"
+      "Bash(gh run list:*)",
+      "Bash(set:*)"
     ]
   }
 }

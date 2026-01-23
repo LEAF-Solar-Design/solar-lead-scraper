@@ -37,7 +37,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.camoufox
-          key: camoufox-${{ runner.os }}-v1
+          key: camoufox-${{ runner.os }}-v2
 
       - name: Set up Camoufox browser
         if: steps.cache-camoufox.outputs.cache-hit != 'true'
