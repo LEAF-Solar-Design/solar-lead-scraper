@@ -1119,7 +1119,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
     #
     # RECENTLY FIXED (Jan 22, 2026):
     # - ZipRecruiter: Fixed selectors + multi-page scraping enabled (5 pages)
-    all_sites = ["indeed", "linkedin", "ziprecruiter"]
+    all_sites = ["indeed", "linkedin", "zip_recruiter"]
 
     # Realistic browser user agents - rotate to avoid fingerprint detection
     # These should match what tls-client uses internally for consistency
