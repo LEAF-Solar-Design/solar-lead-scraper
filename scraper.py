@@ -18,6 +18,20 @@ import pandas as pd
 import requests
 from jobspy import scrape_jobs
 
+# Increase default timeout for requests library (jobspy uses 10s which times out on Indeed)
+# This patches the requests.Session to use a longer timeout by default
+_original_request = requests.Session.request
+
+
+def _patched_request(self, method, url, **kwargs):
+    """Wrapper that sets a longer default timeout for all requests."""
+    if kwargs.get("timeout") is None:
+        kwargs["timeout"] = (10, 30)  # (connect_timeout, read_timeout) in seconds
+    return _original_request(self, method, url, **kwargs)
+
+
+requests.Session.request = _patched_request
+
 
 @dataclass
 class SearchError:
