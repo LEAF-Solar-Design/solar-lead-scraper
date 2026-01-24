@@ -1,0 +1,2 @@
+# This file ensures the output directory exists in the repository.
+# Actual output files (CSVs, JSONs) are gitignored.

@@ -17,6 +17,7 @@ from scraper import (
     categorize_rejection,
     process_jobs,
     ScoringResult,
+    get_batch_slice,
 )
 import pandas as pd
 
@@ -246,6 +247,129 @@ class TestProcessJobs:
         }
         result = process_jobs(df, scoring_results)
         assert result.iloc[0]['confidence_score'] == 75.0
+
+
+class TestGetBatchSlice:
+    """Test batch splitting logic used by GitHub Actions matrix."""
+
+    def test_even_split(self):
+        """Items divide evenly across batches."""
+        items = list(range(8))  # 8 items, 4 batches = 2 each
+        assert get_batch_slice(items, 0, 4) == [0, 1]
+        assert get_batch_slice(items, 1, 4) == [2, 3]
+        assert get_batch_slice(items, 2, 4) == [4, 5]
+        assert get_batch_slice(items, 3, 4) == [6, 7]
+
+    def test_uneven_split(self):
+        """Extra items go to earlier batches."""
+        items = list(range(10))  # 10 items, 4 batches
+        # 10 / 4 = 2 with remainder 2, so batches 0,1 get 3 items each
+        assert get_batch_slice(items, 0, 4) == [0, 1, 2]  # 3 items
+        assert get_batch_slice(items, 1, 4) == [3, 4, 5]  # 3 items
+        assert get_batch_slice(items, 2, 4) == [6, 7]     # 2 items
+        assert get_batch_slice(items, 3, 4) == [8, 9]     # 2 items
+
+    def test_all_batches_cover_all_items(self):
+        """All batches combined should equal original list."""
+        items = list(range(65))  # Actual search term count
+        total_batches = 4
+        combined = []
+        for batch in range(total_batches):
+            combined.extend(get_batch_slice(items, batch, total_batches))
+        assert combined == items
+        assert len(combined) == len(items)
+
+    def test_no_overlap_between_batches(self):
+        """Batches should not share any items."""
+        items = list(range(17))  # Odd number that doesn't divide evenly
+        total_batches = 3
+        all_items = []
+        for batch in range(total_batches):
+            batch_items = get_batch_slice(items, batch, total_batches)
+            for item in batch_items:
+                assert item not in all_items, f"Item {item} appears in multiple batches"
+                all_items.append(item)
+
+    def test_single_batch(self):
+        """Single batch should return all items."""
+        items = list(range(10))
+        assert get_batch_slice(items, 0, 1) == items
+
+    def test_more_batches_than_items(self):
+        """Some batches will be empty if more batches than items."""
+        items = [1, 2]  # 2 items, 4 batches
+        assert get_batch_slice(items, 0, 4) == [1]
+        assert get_batch_slice(items, 1, 4) == [2]
+        assert get_batch_slice(items, 2, 4) == []
+        assert get_batch_slice(items, 3, 4) == []
+
+    def test_empty_list(self):
+        """Empty list should return empty for all batches."""
+        items = []
+        assert get_batch_slice(items, 0, 4) == []
+        assert get_batch_slice(items, 1, 4) == []
+        assert get_batch_slice(items, 2, 4) == []
+        assert get_batch_slice(items, 3, 4) == []
+
+    def test_preserves_order(self):
+        """Items should maintain their original order within batches."""
+        items = ['a', 'b', 'c', 'd', 'e', 'f']
+        result = get_batch_slice(items, 0, 2)
+        assert result == ['a', 'b', 'c']  # First half
+        result = get_batch_slice(items, 1, 2)
+        assert result == ['d', 'e', 'f']  # Second half
+
+    def test_invalid_batch_negative(self):
+        """Negative batch should raise ValueError."""
+        items = list(range(10))
+        try:
+            get_batch_slice(items, -1, 4)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "batch must be >= 0" in str(e)
+
+    def test_invalid_batch_too_large(self):
+        """Batch >= total_batches should raise ValueError."""
+        items = list(range(10))
+        try:
+            get_batch_slice(items, 4, 4)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "must be < total_batches" in str(e)
+
+    def test_invalid_total_batches_zero(self):
+        """total_batches=0 should raise ValueError."""
+        items = list(range(10))
+        try:
+            get_batch_slice(items, 0, 0)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "total_batches must be >= 1" in str(e)
+
+    def test_invalid_total_batches_negative(self):
+        """Negative total_batches should raise ValueError."""
+        items = list(range(10))
+        try:
+            get_batch_slice(items, 0, -1)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "total_batches must be >= 1" in str(e)
+
+    def test_real_world_65_terms_4_batches(self):
+        """Test with actual production values (65 search terms, 4 batches)."""
+        items = list(range(65))  # Simulates 65 search terms
+        # 65 / 4 = 16 with remainder 1
+        # Batch 0 gets 17 items (extra), batches 1-3 get 16 each
+        batch_0 = get_batch_slice(items, 0, 4)
+        batch_1 = get_batch_slice(items, 1, 4)
+        batch_2 = get_batch_slice(items, 2, 4)
+        batch_3 = get_batch_slice(items, 3, 4)
+
+        assert len(batch_0) == 17
+        assert len(batch_1) == 16
+        assert len(batch_2) == 16
+        assert len(batch_3) == 16
+        assert len(batch_0) + len(batch_1) + len(batch_2) + len(batch_3) == 65
 
 
 if __name__ == "__main__":

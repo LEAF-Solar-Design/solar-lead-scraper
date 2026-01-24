@@ -17,7 +17,19 @@
       "Bash(else echo \"No output directory\")",
       "Bash(fi)",
       "Bash(gh run list:*)",
-      "Bash(set:*)"
+      "Bash(set:*)",
+      "Bash(ENABLE_BROWSER_SCRAPING=1 CAMOUFOX_DEBUG=1 python -c \"\nfrom camoufox_scraper import run_camoufox_scraper, CAMOUFOX_AVAILABLE\nimport json\n\nprint\\(''Testing Camoufox scraper with multiple search terms...''\\)\nprint\\(f''CAMOUFOX_AVAILABLE: {CAMOUFOX_AVAILABLE}''\\)\n\n# Test with a few search terms like CI would\ntest_terms = [''solar designer'', ''PV engineer'', ''photovoltaic'']\n\njobs_df, errors, attempts, diagnostics = run_camoufox_scraper\\(\n    search_terms=test_terms,\n    sites=[''ziprecruiter''],  # Only ziprecruiter\n    debug_screenshots=True\n\\)\n\nprint\\(f''\\\\n=== RESULTS ===''\\)\nprint\\(f''Total jobs: {len\\(jobs_df\\)}''\\)\nprint\\(f''Total errors: {len\\(errors\\)}''\\)\nprint\\(f''Total attempts: {len\\(attempts\\)}''\\)\n\nprint\\(f''\\\\n=== ATTEMPTS DETAIL ===''\\)\nfor a in attempts:\n    print\\(f\"\"  {a.get\\(''search_term''\\)}: success={a.get\\(''success''\\)}, jobs={a.get\\(''jobs_found''\\)}, selector={a.get\\(''selector_matched''\\)}\"\"\\)\n\nif errors:\n    print\\(f''\\\\n=== ERRORS ===''\\)\n    for e in errors:\n        print\\(f\"\"  {e}\"\"\\)\n\")",
+      "Bash(pip install:*)",
+      "Bash(find:*)",
+      "Bash(move test_browser.py scripts )",
+      "Bash(move test_anti_scraping_bypass.py scripts )",
+      "Bash(move test_glassdoor_performance.py scripts )",
+      "Bash(move test_glassdoor_scaling.py scripts )",
+      "Bash(move test_optimized_glassdoor.py scripts )",
+      "Bash(move:*)",
+      "Bash(move test_ziprecruiter.py scripts )",
+      "Bash(move test_ziprecruiter_deep.py scripts )",
+      "Bash(move test_ziprecruiter_multipage.py scripts)"
     ]
   }
 }

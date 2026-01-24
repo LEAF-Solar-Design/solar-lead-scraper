@@ -61,13 +61,15 @@ def upload_to_dashboard(csv_path: str):
         try:
             result = response.json()
         except requests.exceptions.JSONDecodeError:
-            print("Warning: Success response was not valid JSON")
+            # Log truncated response for debugging, don't expose full body
+            print(f"Warning: Success response was not valid JSON (first 200 chars): {response.text[:200]}")
             return {"count": "unknown"}
         print(f"Success! Imported {result.get('count', '?')} leads")
         return result
     else:
         print(f"Upload failed: {response.status_code}")
-        print(response.text)
+        # Truncate response to avoid exposing sensitive data in logs
+        print(f"Response (first 500 chars): {response.text[:500]}")
         raise Exception(f"Upload failed with status {response.status_code}")
 
 
@@ -135,7 +137,8 @@ def upload_search_errors(error_data: dict):
         return result
     else:
         print(f"Search error upload failed: {response.status_code}")
-        print(response.text)
+        # Truncate response to avoid exposing sensitive data in logs
+        print(f"Response (first 500 chars): {response.text[:500]}")
         # Don't raise - search error upload is not critical
 
 
@@ -514,7 +517,8 @@ def upload_run_stats(stats_data: dict):
         return result
     else:
         print(f"Run stats upload failed: {response.status_code}")
-        print(response.text)
+        # Truncate response to avoid exposing sensitive data in logs
+        print(f"Response (first 500 chars): {response.text[:500]}")
         # Don't raise - stats upload is not critical
 
 
@@ -564,7 +568,8 @@ def upload_deep_analytics(analytics_data: dict, run_id: str = None):
         return result
     else:
         print(f"Deep analytics upload failed: {response.status_code}")
-        print(response.text)
+        # Truncate response to avoid exposing sensitive data in logs
+        print(f"Response (first 500 chars): {response.text[:500]}")
         # Don't raise - analytics upload is not critical
 
 

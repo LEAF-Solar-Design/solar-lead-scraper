@@ -1,5 +1,79 @@
 # Claude Code Context: Solar Lead Scraper
 
+## Master Data Architecture
+
+**This repo is part of a 5-repo ecosystem with ops-dashboard as the central hub.**
+
+Key architecture documents (in ops-dashboard):
+- **[DATA_ARCHITECTURE_PLAN.md](../ops-dashboard/DATA_ARCHITECTURE_PLAN.md)** - Master data flows, Neon schema, sync triggers
+- **[CROSS_REPO_COORDINATION.md](../ops-dashboard/CROSS_REPO_COORDINATION.md)** - Change propagation matrix
+- **[MASTER_WISHLIST.md](../ops-dashboard/MASTER_WISHLIST.md)** - Cross-repo prioritized wishlist
+- **[WISH_EXECUTION_PLAN.md](../ops-dashboard/WISH_EXECUTION_PLAN.md)** - Current execution status
+
+## Wishlist Execution Status
+
+**Last Updated:** 2026-01-24
+
+### Phase 1: Security - COMPLETED ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 1.1 CSV injection prevention | ✅ DONE | `sanitize_dataframe_for_csv()` in scraper.py |
+| 1.2 Mask proxy credentials in logs | ✅ DONE | `mask_credentials()` helper, applied to all error logging |
+| 1.3 Redact sensitive data in error logs | ✅ DONE | upload_results.py truncates response.text to 500 chars |
+
+### Quick Wins - COMPLETED ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Add .env.example | ✅ DONE | Template for environment variables |
+| Add output/.gitkeep | ✅ DONE | Ensures output directory exists in repo |
+
+### Phase 2: Reliability - PARTIAL ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 2.3 Error context before truncation | ✅ DONE | `extract_error_context()` + SearchError fields |
+| 2.4 Log response on upload failures | ✅ DONE | Done in 1.3 (truncated response logging) |
+
+### Phase 3: Configuration - COMPLETED ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 3.1 Batch parameter bounds checking | ✅ DONE | Validates SCRAPER_BATCH < SCRAPER_TOTAL_BATCHES |
+| 3.4 Document threshold rationale | ✅ DONE | Comment explaining 50.0 threshold logic |
+
+### Phase 4: Code Quality - PARTIAL ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 4.1 Consolidate browser scraper files | ✅ DONE | Deleted unused `camoufox_scraper_optimized.py` (147 lines dead code) |
+| 4.3 Refactor GitHub Actions inline Python | ✅ DONE | `.github/scripts/merge_batch_results.py` |
+
+### Phase 7: Testing - COMPLETED ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 7.1 Batch mode tests | ✅ DONE | `get_batch_slice()` helper + 13 tests in `test_edge_cases.py` |
+| 7.2 Consolidate test files | ✅ DONE | Moved 9 dev scripts to `scripts/`, kept 2 pytest files in `tests/` |
+
+### Pending Items
+
+From [MASTER_WISHLIST.md](../ops-dashboard/MASTER_WISHLIST.md):
+
+**Tier 3 (Reliability):**
+- [ ] Replace silent exception handlers (60+) in camoufox_scraper.py (27+ bare exceptions)
+- [ ] Metrics/alerting on consecutive failures (alerting belongs in ops-dashboard)
+
+**Tier 4 (Code Quality):**
+- [ ] Switch print() to structured logging
+
+**Full plan:** [.planning/WISH_EXECUTION_PLAN.md](.planning/WISH_EXECUTION_PLAN.md)
+
+Local wishlist: [.planning/WISHLIST.md](.planning/WISHLIST.md)
+
+---
+
 ## Project Overview
 
 Python ETL pipeline that scrapes job boards for solar design leads and uploads to ops-dashboard.
@@ -16,6 +90,12 @@ Python ETL pipeline that scrapes job boards for solar design leads and uploads t
 
 1. **[DATA_ARCHITECTURE_PLAN.md](./DATA_ARCHITECTURE_PLAN.md)** - This repo's data flows
 2. **[ops-dashboard/CROSS_REPO_COORDINATION.md](../ops-dashboard/CROSS_REPO_COORDINATION.md)** - Cross-repo change coordination
+
+**Recent ecosystem updates (Jan 2026):**
+- **solar-lead-scraper (this repo):** Completed Tier 1 security fixes (CSV injection, credential masking, log redaction)
+- **linkedin-hubspot-extension:** Completed Tier 1 + Tier 3 (DEBUG mode, timeouts, error handling)
+- **leaf_website:** Completed Tier 1 security fixes (price validation, BigQuery singleton)
+- **ops-dashboard:** Fixed SQL injection and empty catch blocks
 
 ### Connected Repositories
 

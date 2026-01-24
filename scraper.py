@@ -18,6 +18,136 @@ import pandas as pd
 import requests
 from jobspy import scrape_jobs
 
+
+def mask_credentials(text: str) -> str:
+    """Mask credentials in URLs and other sensitive strings.
+
+    Replaces patterns like user:password@host with user:****@host to prevent
+    credential leakage in logs.
+
+    Args:
+        text: String that might contain credentials
+
+    Returns:
+        String with credentials masked
+    """
+    if not isinstance(text, str):
+        return text
+    # Match credentials in URLs: scheme://user:pass@host or user:pass@host
+    # Masks the password portion while keeping username and host visible
+    return re.sub(r'(://[^:]+:)[^@]+(@)', r'\1****\2', text)
+
+
+def sanitize_csv_cell(value) -> str:
+    """Sanitize a cell value to prevent CSV injection attacks.
+
+    Excel and other spreadsheet apps can execute formulas if a cell starts
+    with certain characters. This function prefixes dangerous values with
+    a single quote to prevent execution.
+
+    Args:
+        value: The cell value to sanitize
+
+    Returns:
+        Sanitized string safe for CSV export
+    """
+    if not isinstance(value, str):
+        return value
+    # Characters that trigger formula execution in Excel/LibreOffice
+    dangerous_chars = ('=', '+', '-', '@', '\t', '\r')
+    if value.startswith(dangerous_chars):
+        return "'" + value
+    return value
+
+
+def sanitize_dataframe_for_csv(df: pd.DataFrame) -> pd.DataFrame:
+    """Sanitize all string columns in a DataFrame for safe CSV export.
+
+    Args:
+        df: DataFrame to sanitize
+
+    Returns:
+        New DataFrame with sanitized string values
+    """
+    df = df.copy()
+    for col in df.columns:
+        if df[col].dtype == 'object':  # String columns
+            df[col] = df[col].apply(sanitize_csv_cell)
+    return df
+
+
+def extract_error_context(error: Exception) -> tuple[str, int | None]:
+    """Extract useful context from an exception before truncating the message.
+
+    Extracts the exception class name and HTTP status code (if present) from
+    the full error before the message gets truncated to 500 chars.
+
+    Args:
+        error: The exception to extract context from
+
+    Returns:
+        Tuple of (exception_class_name, status_code_or_None)
+    """
+    exception_class = type(error).__name__
+    status_code = None
+
+    # Try to extract HTTP status code from common patterns
+    error_str = str(error)
+
+    # Check for requests.HTTPError which has response attribute
+    if hasattr(error, 'response') and hasattr(error.response, 'status_code'):
+        status_code = error.response.status_code
+    else:
+        # Try to extract from error message: "403", "429", "500" etc
+        import re as re_local
+        status_match = re_local.search(r'\b([3-5]\d{2})\b', error_str)
+        if status_match:
+            status_code = int(status_match.group(1))
+
+    return exception_class, status_code
+
+
+def get_batch_slice(items: list, batch: int, total_batches: int) -> list:
+    """Get the slice of items for a specific batch.
+
+    Distributes items across batches as evenly as possible. When items don't
+    divide evenly, earlier batches get one extra item each.
+
+    Example with 10 items and 4 batches:
+        - batch 0: items 0-2 (3 items) - gets extra item
+        - batch 1: items 3-5 (3 items) - gets extra item
+        - batch 2: items 6-7 (2 items)
+        - batch 3: items 8-9 (2 items)
+
+    Args:
+        items: List of items to split
+        batch: Batch index (0-based)
+        total_batches: Total number of batches
+
+    Returns:
+        List of items for this batch
+
+    Raises:
+        ValueError: If batch >= total_batches, batch < 0, or total_batches < 1
+    """
+    if total_batches < 1:
+        raise ValueError(f"total_batches must be >= 1, got {total_batches}")
+    if batch < 0:
+        raise ValueError(f"batch must be >= 0, got {batch}")
+    if batch >= total_batches:
+        raise ValueError(f"batch ({batch}) must be < total_batches ({total_batches})")
+
+    # Divide items into roughly equal batches
+    batch_size = len(items) // total_batches
+    remainder = len(items) % total_batches
+
+    # Calculate start and end indices for this batch
+    # Earlier batches get one extra item if there's a remainder
+    start_idx = batch * batch_size + min(batch, remainder)
+    end_idx = start_idx + batch_size + (1 if batch < remainder else 0)
+
+    return items[start_idx:end_idx]
+
 # Increase default timeout for requests library (jobspy uses 10s which times out on Indeed)
 # This patches the requests.Session to use a longer timeout by default
 _original_request = requests.Session.request
@@ -41,9 +171,11 @@ class SearchError:
         search_term: The search term that failed
         site: Which job site(s) were being queried
         error_type: Category of error (rate_limit, blocked, timeout, unknown)
-        error_message: Full error message from exception
+        error_message: Truncated error message (first 500 chars)
         attempts: Number of retry attempts made
         timestamp: When the error occurred
+        exception_class: The exception class name (e.g., 'HTTPError', 'Timeout')
+        status_code: HTTP status code if available (extracted before truncation)
     """
     search_term: str
     site: str
@@ -51,10 +183,12 @@ class SearchError:
     error_message: str
     attempts: int
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    exception_class: str = ""
+    status_code: int | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON export."""
-        return {
+        result = {
             "search_term": self.search_term,
             "site": self.site,
             "error_type": self.error_type,
@@ -62,6 +196,12 @@ class SearchError:
             "attempts": self.attempts,
             "timestamp": self.timestamp
         }
+        # Include additional context if available
+        if self.exception_class:
+            result["exception_class"] = self.exception_class
+        if self.status_code is not None:
+            result["status_code"] = self.status_code
+        return result
 
 
 @dataclass
@@ -741,6 +881,9 @@ def score_job(description: str, company_name: str = None, config: dict = None, t
     if config is None:
         config = get_config()
 
+    # Default threshold of 50.0 requires strong signals from both company (solar-focused)
+    # and role (CAD/design work). This filters ~96% of raw jobs to ~4% qualified leads.
+    # Breakdown: company_score (25-35 for solar keywords) + role_score (25-40 for CAD/design)
     threshold = config.get("threshold", 50.0)
 
     # Score company separately
@@ -1141,15 +1284,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
 
     # Split search terms into batches if batch mode is enabled
     if batch is not None:
-        # Divide terms into roughly equal batches
-        batch_size = len(all_search_terms) // total_batches
-        remainder = len(all_search_terms) % total_batches
-
-        # Calculate start and end indices for this batch
-        start_idx = batch * batch_size + min(batch, remainder)
-        end_idx = start_idx + batch_size + (1 if batch < remainder else 0)
-
-        search_terms = all_search_terms[start_idx:end_idx]
+        search_terms = get_batch_slice(all_search_terms, batch, total_batches)
         print(f"Batch {batch + 1}/{total_batches}: processing {len(search_terms)} search terms")
     else:
         search_terms = all_search_terms
@@ -1278,7 +1413,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                     search_attempt.duration_ms = int((time.time() - attempt_start) * 1000)
                     search_attempt.success = False
                     search_attempt.error_type = error_type
-                    search_attempt.error_message = str(e)[:500]
+                    search_attempt.error_message = mask_credentials(str(e)[:500])
                     # Check for cloudflare indicators in error
                     error_lower = str(e).lower()
                     if "cloudflare" in error_lower or "403" in error_lower or "captcha" in error_lower:
@@ -1286,13 +1421,13 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                         search_attempt.cloudflare_solved = False
                     deep_analytics.record_attempt(search_attempt)
 
-                    print(f"  [{site}] Attempt {attempt + 1} failed ({error_type}): {str(e)[:100]}")
+                    print(f"  [{site}] Attempt {attempt + 1} failed ({error_type}): {mask_credentials(str(e)[:100])}")
 
                     # If blocked/403, mark site as blocked for this run
                     if error_type == "blocked":
                         print(f"  [{site}] Site appears blocked, skipping for rest of run")
                         blocked_sites.add(site)
-                        scrape_stats.record_site_blocked(site, term, str(e))
+                        scrape_stats.record_site_blocked(site, term, mask_credentials(str(e)))
                         break
 
                     # Brief delay before retry
@@ -1323,12 +1458,16 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         # Record errors for sites that failed (but weren't just blocked)
         for site, error in term_errors:
             error_type = classify_error(error) if error else "unknown"
+            # Extract context BEFORE truncating the message
+            exception_class, status_code = extract_error_context(error) if error else ("", None)
             search_errors.append(SearchError(
                 search_term=term,
                 site=site,
                 error_type=error_type,
-                error_message=str(error)[:500] if error else "Unknown error",
-                attempts=2
+                error_message=mask_credentials(str(error)[:500]) if error else "Unknown error",
+                attempts=2,
+                exception_class=exception_class,
+                status_code=status_code
             ))
 
         if consecutive_failures >= max_consecutive_failures:
@@ -1372,7 +1511,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                     search_term=err.get("search_term", ""),
                     site=err.get("site", "browser"),
                     error_type=err.get("error_type", "unknown"),
-                    error_message=err.get("error_message", ""),
+                    error_message=mask_credentials(err.get("error_message", "")),
                     attempts=1
                 ))
             # Add browser search attempts to deep analytics
@@ -1385,7 +1524,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
                     jobs_found=attempt_dict.get("jobs_found", 0),
                     duration_ms=attempt_dict.get("duration_ms", 0),
                     error_type=attempt_dict.get("error_type"),
-                    error_message=attempt_dict.get("error_message"),
+                    error_message=mask_credentials(attempt_dict.get("error_message") or ""),
                     selectors_tried=attempt_dict.get("selectors_tried", []),
                     selector_matched=attempt_dict.get("selector_matched"),
                     cloudflare_detected=attempt_dict.get("cloudflare_detected", False),
@@ -1683,6 +1822,15 @@ def main():
     batch = int(batch_env) if batch_env is not None else None
     total_batches = int(total_batches_env)
 
+    # Validate batch parameters to fail fast on misconfiguration
+    if batch is not None:
+        if batch < 0:
+            raise ValueError(f"SCRAPER_BATCH must be >= 0, got {batch}")
+        if total_batches < 1:
+            raise ValueError(f"SCRAPER_TOTAL_BATCHES must be >= 1, got {total_batches}")
+        if batch >= total_batches:
+            raise ValueError(f"SCRAPER_BATCH ({batch}) must be < SCRAPER_TOTAL_BATCHES ({total_batches})")
+
     # Ensure output directory exists (needed for exports even if no jobs)
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(exist_ok=True)
@@ -1733,7 +1881,9 @@ def main():
     # Save qualified leads to CSV (include batch number if in batch mode to avoid collisions)
     batch_suffix = f"_batch{batch}" if batch is not None else ""
     output_file = output_dir / f"solar_leads_{timestamp}{batch_suffix}.csv"
-    leads.to_csv(output_file, index=False)
+    # Sanitize to prevent CSV injection from malicious job descriptions
+    sanitized_leads = sanitize_dataframe_for_csv(leads)
+    sanitized_leads.to_csv(output_file, index=False)
 
     # Export comprehensive run stats
     stats_path = export_run_stats(scrape_stats, stats, output_dir, unique_companies=len(leads))
