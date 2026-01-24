@@ -547,12 +547,27 @@ def load_filter_config(config_path: Path = None) -> dict:
 
     Returns:
         Configuration dictionary with signals, weights, and threshold.
+
+    Raises:
+        ValueError: If required keys are missing from the config.
     """
     if config_path is None:
         config_path = Path(__file__).parent / "config" / "filter-config.json"
 
     with open(config_path, encoding="utf-8") as f:
-        return json.load(f)
+        config = json.load(f)
+
+    # Validate required keys
+    required_keys = ["company_blocklist", "required_context", "exclusions", "positive_signals"]
+    missing = [k for k in required_keys if k not in config]
+    if missing:
+        raise ValueError(f"Filter config missing required keys: {missing}")
+
+    # Validate required_context structure
+    if "patterns" not in config.get("required_context", {}):
+        raise ValueError("Filter config required_context missing 'patterns' key")
+
+    return config
 
 
 # Load config at module level (lazy loading on first use)
@@ -607,8 +622,14 @@ def score_role(description: str, config: dict, title: str = None) -> tuple[float
         Tuple of (score, reasons_list)
         Score is sum of matched positive signals, -100 if exclusion matched
     """
-    if not description or pd.isna(description):
-        return (0.0, ["No description provided"])
+    # Handle None, NaN, pd.NA, or empty string
+    try:
+        if pd.isna(description) or not description:
+            return (0.0, ["No description provided"])
+    except (ValueError, TypeError):
+        # pd.isna can raise for some types; treat as no description
+        if not description:
+            return (0.0, ["No description provided"])
 
     desc_lower = description.lower()
     title_lower = title.lower() if title and isinstance(title, str) else ""
@@ -915,15 +936,34 @@ def categorize_rejection(result: ScoringResult) -> str:
         return "no_solar_context"
 
     if "excluded" in reason:
-        if any(x in reason for x in ["installer", "stringer", "roofer", "foreman", "crew"]):
+        # Installer roles
+        if any(x in reason for x in ["installer", "stringer", "roofer", "foreman", "crew", "technician", "lineman", "lineworker"]):
             return "exclusions.installer"
-        if any(x in reason for x in ["interconnection", "grid", "protection", "metering"]):
-            return "exclusions.utility"
-        if any(x in reason for x in ["cadence", "synopsys", "mentor", "eda", "asic", "verilog"]):
+        # Sales and marketing
+        if any(x in reason for x in ["sales", "marketing", "account executive", "business development"]):
+            return "exclusions.sales"
+        # Management roles (use word boundaries to avoid matching "semiconductor" -> "cto")
+        if any(x in reason for x in ["manager", "director", "vp ", "vice president", "chief "]) or \
+           any(f" {x}" in reason or reason.startswith(x) for x in ["ceo", "cto", "cfo"]):
+            return "exclusions.management"
+        # Other engineering (non-design)
+        if any(x in reason for x in ["application engineer", "field engineer", "commissioning", "systems engineer",
+                                      "interconnection", "grid", "protection", "metering", "estimator", "preconstruction"]):
+            return "exclusions.other_engineering"
+        # Structural/civil/mechanical engineering
+        if any(x in reason for x in ["structural engineer", "civil engineer", "mechanical engineer", "geotechnical"]):
+            return "exclusions.other_engineering_strict"
+        # EDA tools (chip design)
+        if any(x in reason for x in ["cadence", "synopsys", "mentor", "eda", "asic", "verilog", "virtuoso", "spectre"]):
             return "exclusions.eda_tools"
-        if any(x in reason for x in ["satellite", "spacecraft", "orbit", "rocket"]):
-            return "exclusions.aerospace"
-        if any(x in reason for x in ["tennis", "racquet", "badminton"]):
+        # Semiconductor
+        if any(x in reason for x in ["semiconductor", "rtl design", "fpga", "vlsi", "chip design", "wafer", "foundry"]):
+            return "exclusions.semiconductor"
+        # Space/aerospace
+        if any(x in reason for x in ["satellite", "spacecraft", "orbit", "rocket", "aerospace", "starlink", "avionics"]):
+            return "exclusions.space"
+        # Tennis (false positives)
+        if any(x in reason for x in ["tennis", "racquet", "badminton", "pickleball"]):
             return "exclusions.tennis"
         return "exclusions.other"
 
@@ -1690,8 +1730,9 @@ def main():
         rejected_path = export_rejected_leads(rejected_leads, output_dir, timestamp)
         print(f"\nExported {min(100, len(rejected_leads))} rejected leads to: {rejected_path}")
 
-    # Save qualified leads to CSV
-    output_file = output_dir / f"solar_leads_{timestamp}.csv"
+    # Save qualified leads to CSV (include batch number if in batch mode to avoid collisions)
+    batch_suffix = f"_batch{batch}" if batch is not None else ""
+    output_file = output_dir / f"solar_leads_{timestamp}{batch_suffix}.csv"
     leads.to_csv(output_file, index=False)
 
     # Export comprehensive run stats

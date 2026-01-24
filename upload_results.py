@@ -58,7 +58,11 @@ def upload_to_dashboard(csv_path: str):
     response = requests.post(url, data=csv_content, headers=headers)
 
     if response.status_code == 200:
-        result = response.json()
+        try:
+            result = response.json()
+        except requests.exceptions.JSONDecodeError:
+            print("Warning: Success response was not valid JSON")
+            return {"count": "unknown"}
         print(f"Success! Imported {result.get('count', '?')} leads")
         return result
     else:
@@ -80,8 +84,12 @@ def merge_search_errors(error_files: list[str]) -> dict:
     total_by_type = {}
 
     for filepath in error_files:
-        with open(filepath, "r") as f:
-            data = json.load(f)
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Skipping corrupted error file {filepath}: {e}")
+            continue
 
         all_errors.extend(data.get("errors", []))
 
@@ -151,8 +159,12 @@ def merge_deep_analytics(analytics_files: list[str]) -> dict:
     start_times = []
 
     for filepath in analytics_files:
-        with open(filepath, "r") as f:
-            data = json.load(f)
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Skipping corrupted analytics file {filepath}: {e}")
+            continue
 
         all_raw_attempts.extend(data.get("raw_attempts", []))
 
@@ -348,8 +360,12 @@ def merge_run_stats(stats_files: list[str]) -> dict:
     batches_processed = []
 
     for filepath in stats_files:
-        with open(filepath, "r") as f:
-            data = json.load(f)
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Skipping corrupted stats file {filepath}: {e}")
+            continue
 
         # Track batch info
         if data.get("metadata", {}).get("batch") is not None:
@@ -561,6 +577,9 @@ def main():
     except FileNotFoundError:
         print("No CSV files found in output/ - scraper may have produced no results")
         print("Skipping leads upload (this is not a fatal error)")
+    except Exception as e:
+        print(f"CSV upload failed: {e}")
+        print("Continuing with stats/errors upload...")
 
     # Upload run stats (always - even if no leads)
     stats_files = get_run_stats_files()
