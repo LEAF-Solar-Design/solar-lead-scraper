@@ -35,7 +35,7 @@ def test_ziprecruiter():
 
     try:
         # Scrape ZipRecruiter
-        jobs_df, errors, search_attempts = run_camoufox_scraper(
+        jobs_df, errors, search_attempts, diagnostics = run_camoufox_scraper(
             search_terms=[search_term],
             sites=["ziprecruiter"],  # Only test ZipRecruiter
             debug_screenshots=True

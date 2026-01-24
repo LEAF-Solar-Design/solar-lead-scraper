@@ -212,8 +212,8 @@ CAMOUFOX_DEBUG=1 python scraper.py
 
 1. ✅ **COMPLETED** - Fix ZipRecruiter scraper
 2. 🔄 **IN PROGRESS** - Monitor Glassdoor performance (separate session)
-3. ⏭️ **TODO** - Run full scraper test with all 65 search terms
-4. ⏭️ **TODO** - Deploy to GitHub Actions and verify in production
+3. ✅ **COMPLETED** - Run full scraper test with all 65 search terms (verified 2026-01-23: 100 jobs found, 0 errors)
+4. ✅ **COMPLETED** - Deploy to GitHub Actions and verify in production (commit 06bc98a pushed to origin/main)
 5. ⏭️ **TODO** - Add selector health monitoring to catch future breakages earlier
 
 ## References
