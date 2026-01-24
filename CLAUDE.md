@@ -19,9 +19,22 @@ Python ETL pipeline that scrapes job boards for solar design leads and uploads t
 
 ### Connected Repositories
 
-| Repo | Relationship |
-|------|--------------|
-| **ops-dashboard** | Receives lead CSV via POST /api/jobs/ingest |
+| Repo | Path | Relationship to Scraper |
+|------|------|------------------------|
+| **ops-dashboard** | `../ops-dashboard` | Receives leads, stats, errors via API. Central hub. |
+| **leaf_website** | `../leaf_website` | No direct connection. Shares customers via ops-dashboard. |
+| **linkedin-hubspot-extension** | `../linkedin-hubspot-extension` | No direct connection. May contact leads we find. |
+| **cable-sizing (plugin)** | `../cable-sizing/beta-v1/beta-v1` | No direct connection. End users of the product. |
+
+**Ecosystem Architecture:**
+```
+ops-dashboard (Hub) ← Neon DB (source of truth)
+     ↑
+     ├── scraper (this) → sends leads
+     ├── leaf_website → sends signups/subscriptions
+     ├── linkedin-hubspot-extension → sends CRM activity
+     └── cable-sizing plugin → sends usage telemetry
+```
 
 ### API Contract
 
