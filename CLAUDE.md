@@ -58,7 +58,59 @@ Check the coordination guide when changing:
 
 ```bash
 DASHBOARD_URL=         # ops-dashboard base URL
-DASHBOARD_API_KEY=     # API authentication
+DASHBOARD_API_KEY=     # API authentication (uses LEADS_API_KEY on ops-dashboard side)
 SCRAPER_BATCH=         # 0-3 (which batch)
 SCRAPER_TOTAL_BATCHES= # 4 (total parallel)
 ```
+
+---
+
+## Quick Reference
+
+### Build Verification
+```bash
+# Syntax check all Python files
+python -m py_compile scraper.py upload_results.py camoufox_scraper.py
+
+# Verify imports work
+python -c "import scraper; import upload_results; print('OK')"
+
+# Validate config
+python -c "import json; json.load(open('config/filter-config.json')); print('OK')"
+```
+
+### Key Functions (scraper.py)
+- `scrape_solar_jobs()` - Main scraping entry point (line ~991)
+- `score_job()` - Qualification scoring (line ~706)
+- `classify_error()` - Error categorization (line ~960)
+- `process_jobs()` - Deduplication and output formatting (line ~1547)
+
+### Key Functions (upload_results.py)
+- `upload_to_dashboard()` - POST CSV to /api/jobs/ingest
+- `upload_search_errors()` - POST JSON to /api/scraper/errors
+- `upload_run_stats()` - POST JSON to /api/scraper/stats
+- `upload_deep_analytics()` - POST JSON to /api/scraper/analytics
+
+### Output Files (in output/)
+- `solar_leads_{timestamp}.csv` - Qualified leads
+- `run_stats_{timestamp}.json` - Run statistics
+- `search_errors_{timestamp}.json` - Failed searches
+- `deep_analytics_{timestamp}.json` - Detailed diagnostics
+
+### Error Types
+The scraper classifies errors as: `rate_limit | blocked | timeout | connection | unknown`
+
+### API Endpoints (ops-dashboard)
+All endpoints use Bearer token auth with `LEADS_API_KEY`:
+- `POST /api/jobs/ingest` - CSV upload (required)
+- `POST /api/scraper/errors` - Error reporting
+- `POST /api/scraper/stats` - Run statistics
+- `POST /api/scraper/analytics` - Deep diagnostics (optional)
+
+---
+
+## Testing Locally
+
+The scraper takes a long time to run (65 search terms × 4 sites). For quick testing:
+- Check existing output files in `output/` directory
+- Recent run stats show ~47k raw jobs → ~4k qualified → ~157 unique companies
