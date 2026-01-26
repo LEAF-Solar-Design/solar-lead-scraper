@@ -1,103 +1,381 @@
 {
   "version": "1.0",
-  "threshold": 50.0,
-
+  "threshold": 50,
   "company_blocklist": [
-    "boeing", "northrop grumman", "lockheed", "lockheed martin",
-    "raytheon", "spacex", "blue origin", "general dynamics",
-    "bae systems", "l3harris", "leidos", "huntington ingalls",
-    "rtx", "rtx corporation", "sierra nevada corporation",
-    "intel", "nvidia", "amd", "qualcomm", "broadcom",
-    "texas instruments", "micron", "applied materials",
-    "lam research", "kla", "asml", "marvell", "microchip"
+    "boeing",
+    "northrop grumman",
+    "lockheed",
+    "lockheed martin",
+    "raytheon",
+    "spacex",
+    "blue origin",
+    "general dynamics",
+    "bae systems",
+    "l3harris",
+    "leidos",
+    "huntington ingalls",
+    "rtx",
+    "rtx corporation",
+    "sierra nevada corporation",
+    "intel",
+    "nvidia",
+    "amd",
+    "qualcomm",
+    "broadcom",
+    "texas instruments",
+    "micron",
+    "applied materials",
+    "lam research",
+    "kla",
+    "asml",
+    "marvell",
+    "microchip",
+    "huntington national bank"
   ],
-
   "required_context": {
-    "patterns": ["solar", "pv", "photovoltaic", "helioscope", "pvsyst"],
+    "patterns": [
+      "solar",
+      "pv",
+      "photovoltaic",
+      "helioscope",
+      "pvsyst"
+    ],
     "description": "Must have solar/PV/Helioscope/PVSyst context in title or description to qualify"
   },
-
   "exclusions": {
     "tennis": {
-      "patterns": ["tennis", "racquet", "racket", "pickleball", "badminton"],
+      "patterns": [
+        "tennis",
+        "racquet",
+        "racket",
+        "pickleball",
+        "badminton"
+      ],
       "description": "Tennis stringing false positives"
     },
     "space": {
-      "patterns": ["spacecraft", "satellite", "space system", "aerospace", "starlink", "orbit", "launch vehicle", "avionics", "space exploration"],
+      "patterns": [
+        "spacecraft",
+        "satellite",
+        "space system",
+        "aerospace",
+        "starlink",
+        "orbit",
+        "launch vehicle",
+        "avionics",
+        "space exploration"
+      ],
       "description": "Spacecraft solar panels"
     },
     "semiconductor": {
-      "patterns": ["semiconductor", "rtl design", "asic design", "fpga design", "vlsi", "chip design", "physical verification", "place and route", "foundry", "wafer fab", "silicon design", "integrated circuit", "ic design"],
+      "patterns": [
+        "semiconductor",
+        "rtl design",
+        "asic design",
+        "fpga design",
+        "vlsi",
+        "chip design",
+        "physical verification",
+        "place and route",
+        "foundry",
+        "wafer fab",
+        "silicon design",
+        "integrated circuit",
+        "ic design"
+      ],
       "description": "Chip design industry"
     },
     "eda_tools": {
-      "patterns": ["cadence", "synopsys", "mentor graphics", "siemens eda", "virtuoso", "spectre", "innovus", "genus", "conformal", "calibre", "questa", "modelsim", "vcs", "verdi", "primetime", "icc2", "design compiler", "dc shell", "spyglass", "formality", "encounter", "ic compiler"],
+      "patterns": [
+        "cadence",
+        "synopsys",
+        "mentor graphics",
+        "siemens eda",
+        "virtuoso",
+        "spectre",
+        "innovus",
+        "genus",
+        "conformal",
+        "calibre",
+        "questa",
+        "modelsim",
+        "vcs",
+        "verdi",
+        "primetime",
+        "icc2",
+        "design compiler",
+        "dc shell",
+        "spyglass",
+        "formality",
+        "encounter",
+        "ic compiler"
+      ],
       "description": "EDA chip design tools"
     },
     "installer": {
-      "patterns": ["solar installer", "pv installer", "panel installer", "installation technician", "roof lead", "journeyman electrician", "apprentice electrician", "lineman", "lineworker", "o&m technician", "field technician", "service technician", "field service", "commissioning technician", "maintenance technician", "solar technician", "pv technician", "array supervisor", "stringer", "roofer", "foreman", "crew lead", "installation crew", "install team"],
+      "patterns": [
+        "solar installer",
+        "pv installer",
+        "panel installer",
+        "installation technician",
+        "roof lead",
+        "journeyman electrician",
+        "apprentice electrician",
+        "lineman",
+        "lineworker",
+        "o&m technician",
+        "field technician",
+        "service technician",
+        "field service",
+        "commissioning technician",
+        "maintenance technician",
+        "solar technician",
+        "pv technician",
+        "array supervisor",
+        "stringer",
+        "roofer",
+        "foreman",
+        "crew lead",
+        "installation crew",
+        "install team",
+        "technician"
+      ],
       "description": "Field installation roles",
       "check_area": "title"
     },
     "sales": {
-      "patterns": ["sales director", "sales manager", "marketing director", "marketing manager", "account executive", "business development", "sales representative", "sales team", "sales & marketing", "sales and marketing", "sales consultant", "sales engineer", "sales specialist", "account manager", "territory manager"],
+      "patterns": [
+        "sales director",
+        "sales manager",
+        "marketing director",
+        "marketing manager",
+        "account executive",
+        "business development",
+        "sales representative",
+        "sales team",
+        "sales & marketing",
+        "sales and marketing",
+        "sales consultant",
+        "sales engineer",
+        "sales specialist",
+        "account manager",
+        "territory manager"
+      ],
       "description": "Sales and marketing roles",
       "check_area": "title"
     },
     "management": {
-      "patterns": ["project manager", "construction manager", "operations manager", "program manager", "development manager", "site manager", "general manager", "director of operations", "vp ", "vice president", "chief ", "ceo", "cto", "cfo"],
+      "patterns": [
+        "project manager",
+        "construction manager",
+        "operations manager",
+        "program manager",
+        "development manager",
+        "site manager",
+        "general manager",
+        "director of operations",
+        "vp ",
+        "vice president",
+        "chief ",
+        "ceo",
+        "cto",
+        "cfo"
+      ],
       "description": "Management roles",
       "check_area": "title"
     },
     "other_engineering": {
-      "patterns": ["application engineer", "applications engineer", "technical sales", "technical support", "field engineer", "commissioning engineer", "product engineer", "construction engineer", "site engineer", "manufacturing engineer", "process engineer", "quality engineer", "systems engineer", "transmission engineer", "substation engineer", "protection and control", "p&c engineer", "relay engineer", "estimator", "preconstruction", "interconnection engineer", "grid engineer", "protection engineer", "metering engineer"],
+      "patterns": [
+        "application engineer",
+        "applications engineer",
+        "technical sales",
+        "technical support",
+        "field engineer",
+        "commissioning engineer",
+        "product engineer",
+        "construction engineer",
+        "site engineer",
+        "manufacturing engineer",
+        "process engineer",
+        "quality engineer",
+        "systems engineer",
+        "transmission engineer",
+        "substation engineer",
+        "protection and control",
+        "p&c engineer",
+        "relay engineer",
+        "estimator",
+        "preconstruction",
+        "interconnection engineer",
+        "grid engineer",
+        "protection engineer",
+        "metering engineer"
+      ],
       "description": "Non-design engineering roles",
       "check_area": "title"
     },
     "other_engineering_strict": {
-      "patterns": ["structural engineer", "civil engineer", "mechanical engineer", "geotechnical engineer"],
+      "patterns": [
+        "structural engineer",
+        "civil engineer",
+        "mechanical engineer",
+        "geotechnical engineer"
+      ],
       "description": "Engineering disciplines that commonly appear in coordination contexts - only exclude if in job title",
+      "check_area": "title"
+    },
+    "ops_dashboard_exclusions": {
+      "patterns": [
+        "developer",
+        "asset",
+        "civil"
+      ],
+      "description": "Exclusions added from ops-dashboard feedback (ops_dashboard_exclusions)",
       "check_area": "title"
     }
   },
-
   "positive_signals": {
     "tier1_tools": {
-      "patterns": ["helioscope", "aurora solar", "pvsyst", "solaredge designer", "opensolaris", "pv production modeling", "solar production modeling", "string sizing", "stringing diagram", "module layout", "panel layout"],
+      "patterns": [
+        "helioscope",
+        "aurora solar",
+        "pvsyst",
+        "solaredge designer",
+        "opensolaris",
+        "pv production modeling",
+        "solar production modeling",
+        "string sizing",
+        "stringing diagram",
+        "module layout",
+        "panel layout"
+      ],
       "weight": 100,
       "description": "Solar-specific design tools and tasks - auto-qualify"
     },
     "tier2_strong": {
-      "patterns": ["string sizing", "stringing diagram", "stringing layout", "module layout", "array layout", "panel layout", "single line diagram", "single-line diagram", "one-line diagram", "sld ", "conduit schedule", "wiring schedule", "wire schedule", "permit set", "plan set", "permit package", "construction drawing", "voltage drop calculation", "voltage drop calc"],
+      "patterns": [
+        "string sizing",
+        "stringing diagram",
+        "stringing layout",
+        "module layout",
+        "array layout",
+        "panel layout",
+        "single line diagram",
+        "single-line diagram",
+        "one-line diagram",
+        "sld ",
+        "conduit schedule",
+        "wiring schedule",
+        "wire schedule",
+        "permit set",
+        "plan set",
+        "permit package",
+        "construction drawing",
+        "voltage drop calculation",
+        "voltage drop calc"
+      ],
       "weight": 60,
       "requires": "design_role",
       "description": "Strong technical signals requiring design role"
     },
     "tier3_cad_project": {
-      "patterns_cad": ["autocad", "auto cad", "revit", "sketchup", "bluebeam", "solidworks"],
-      "patterns_project": ["solar array", "pv array", "solar installation", "pv installation", "solar project", "pv project", "solar system", "pv system", "residential solar", "commercial solar", "utility solar", "utility-scale solar", "rooftop solar", "ground mount solar", "carport solar", "energy storage project", "battery storage project", "bess project", "storage system"],
+      "patterns_cad": [
+        "autocad",
+        "auto cad",
+        "revit",
+        "sketchup",
+        "bluebeam",
+        "solidworks"
+      ],
+      "patterns_project": [
+        "solar array",
+        "pv array",
+        "solar installation",
+        "pv installation",
+        "solar project",
+        "pv project",
+        "solar system",
+        "pv system",
+        "residential solar",
+        "commercial solar",
+        "utility solar",
+        "utility-scale solar",
+        "rooftop solar",
+        "ground mount solar",
+        "carport solar",
+        "energy storage project",
+        "battery storage project",
+        "bess project",
+        "storage system"
+      ],
       "weight": 40,
       "requires": "design_role",
       "description": "General CAD + design role + solar/storage project type"
     },
     "tier4_title": {
-      "patterns": ["solar designer", "pv designer", "solar drafter", "pv drafter", "solar design engineer", "pv design engineer", "solar cad", "photovoltaic designer", "solar design technician", "solar engineer", "pv engineer", "photovoltaic engineer", "solar project engineer", "pv project engineer"],
+      "patterns": [
+        "solar designer",
+        "pv designer",
+        "solar drafter",
+        "pv drafter",
+        "solar design engineer",
+        "pv design engineer",
+        "solar cad",
+        "photovoltaic designer",
+        "solar design technician",
+        "solar engineer",
+        "pv engineer",
+        "photovoltaic engineer",
+        "solar project engineer",
+        "pv project engineer"
+      ],
       "weight": 80,
       "check_area": "title",
       "description": "Explicit solar design job titles"
     },
     "tier5_cad_design": {
-      "patterns_cad": ["autocad", "auto cad", "revit", "sketchup", "bluebeam", "solidworks"],
+      "patterns_cad": [
+        "autocad",
+        "auto cad",
+        "revit",
+        "sketchup",
+        "bluebeam",
+        "solidworks"
+      ],
       "weight": 30,
       "requires": "design_role",
       "description": "CAD tool + design role (with solar context from required_context)"
     },
     "tier6_design_titles": {
-      "patterns": ["electrical designer", "electrical drafter", "electrical design technician", "cad designer", "cad drafter", "cad technician", "cad operator", "design technician", "drafting technician", "bim modeler", "bim technician", "design assistant", "permit designer"],
+      "patterns": [
+        "electrical designer",
+        "electrical drafter",
+        "electrical design technician",
+        "cad designer",
+        "cad drafter",
+        "cad technician",
+        "cad operator",
+        "design technician",
+        "drafting technician",
+        "bim modeler",
+        "bim technician",
+        "design assistant",
+        "permit designer",
+        "assistant",
+        "utility-scale"
+      ],
       "weight": 20,
       "description": "Design role titles with solar context"
     }
   },
-
-  "design_role_indicators": ["designer", "drafter", "draftsman", "drafting", "cad ", "design engineer", "design technician", "cad technician"]
+  "design_role_indicators": [
+    "designer",
+    "drafter",
+    "draftsman",
+    "drafting",
+    "cad ",
+    "design engineer",
+    "design technician",
+    "cad technician"
+  ]
 }
