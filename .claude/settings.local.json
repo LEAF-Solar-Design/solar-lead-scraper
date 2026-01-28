@@ -29,7 +29,16 @@
       "Bash(move:*)",
       "Bash(move test_ziprecruiter.py scripts )",
       "Bash(move test_ziprecruiter_deep.py scripts )",
-      "Bash(move test_ziprecruiter_multipage.py scripts)"
+      "Bash(move test_ziprecruiter_multipage.py scripts)",
+      "Bash(npm run build:*)",
+      "Bash(npx prisma validate:*)",
+      "Bash(tasklist:*)",
+      "Bash(wmic process where \"name=''node.exe''\" get commandline,processid)",
+      "WebFetch(domain:seia.org)",
+      "WebFetch(domain:www.nabcep.org)",
+      "WebFetch(domain:www.solarjobsusa.com)",
+      "WebFetch(domain:www.orssia.org)",
+      "WebFetch(domain:jobs.nabcep.org)"
     ]
   }
 }

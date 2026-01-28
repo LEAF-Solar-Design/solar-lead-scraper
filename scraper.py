@@ -1210,6 +1210,8 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         "design technician",
         "drafting technician",
         "engineering technician electrical",
+        "engineering technician solar",
+        "engineering technician PV",
         "design assistant",
         "drafting assistant",
 
@@ -1217,6 +1219,8 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         "design coordinator",
         "CAD coordinator",
         "electrical detailer",
+        "drafting specialist",
+        "solar design technician",
 
         # BIM roles (often overlap with solar design)
         "BIM modeler",
@@ -1239,6 +1243,10 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         "photovoltaic engineer",
         "solar permit designer",
         "solar plans designer",
+        "solar energy systems designer",
+        "solar systems designer",
+        "solar project estimator",
+        "solar estimator",
 
         # Tool-based searches (searches job descriptions, very targeted)
         "helioscope",
@@ -1274,6 +1282,8 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         "battery storage designer",
         "BESS engineer",
         "BESS designer",
+        "PV BESS designer",
+        "PV BESS drafter",
 
         # Renewables general (catches solar+storage hybrid roles)
         "renewables engineer",

@@ -50,7 +50,7 @@
       "check_area": "title"
     },
     "other_engineering": {
-      "patterns": ["application engineer", "applications engineer", "technical sales", "technical support", "field engineer", "commissioning engineer", "product engineer", "construction engineer", "site engineer", "manufacturing engineer", "process engineer", "quality engineer", "systems engineer", "transmission engineer", "substation engineer", "protection and control", "p&c engineer", "relay engineer", "estimator", "preconstruction", "interconnection engineer", "grid engineer", "protection engineer", "metering engineer"],
+      "patterns": ["application engineer", "applications engineer", "technical sales", "technical support", "field engineer", "commissioning engineer", "product engineer", "construction engineer", "site engineer", "manufacturing engineer", "process engineer", "quality engineer", "systems engineer", "transmission engineer", "substation engineer", "protection and control", "p&c engineer", "relay engineer", "cost estimator", "mep estimator", "preconstruction", "interconnection engineer", "grid engineer", "protection engineer", "metering engineer"],
       "description": "Non-design engineering roles",
       "check_area": "title"
     },
