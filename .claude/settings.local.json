@@ -38,7 +38,8 @@
       "WebFetch(domain:www.nabcep.org)",
       "WebFetch(domain:www.solarjobsusa.com)",
       "WebFetch(domain:www.orssia.org)",
-      "WebFetch(domain:jobs.nabcep.org)"
+      "WebFetch(domain:jobs.nabcep.org)",
+      "Bash(test:*)"
     ]
   }
 }

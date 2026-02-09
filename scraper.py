@@ -954,11 +954,124 @@ def generate_linkedin_hiring_search_url(company_name: str) -> str:
     return f"https://www.google.com/search?q={encoded_query}"
 
 
-def generate_linkedin_enduser_search_url(company_name: str, job_title: str) -> str:
-    """Generate a Google search URL for end users - people in CAD/design roles at the company."""
+def fetch_search_template_from_api() -> list[str] | None:
+    """Fetch active search template keywords from ops-dashboard API.
+
+    Environment variables:
+        OPS_DASHBOARD_API_URL: Base URL of ops-dashboard (e.g., https://ops.example.com)
+        OPS_DASHBOARD_API_KEY: Optional API key for authentication
+
+    Returns:
+        List of search keywords, or None if API unavailable
+    """
+    import requests
+
+    api_url = os.environ.get("OPS_DASHBOARD_API_URL")
+    api_key = os.environ.get("OPS_DASHBOARD_API_KEY")
+
+    if not api_url:
+        return None
+
+    try:
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        response = requests.get(
+            f"{api_url}/api/search-templates/active",
+            headers=headers,
+            timeout=10
+        )
+
+        if response.ok:
+            data = response.json()
+            if data.get("success") and data.get("keywords"):
+                print(f"Using search template from API: {data.get('template', {}).get('name', 'unknown')}")
+                return data["keywords"]
+    except Exception as e:
+        print(f"Failed to fetch search template from API: {e}")
+
+    return None
+
+
+# Cache the template keywords at module level to avoid repeated API calls
+_cached_template_keywords: list[str] | None = None
+_template_cache_loaded: bool = False
+
+
+def get_search_template_keywords(config: dict = None) -> list[str]:
+    """Get search template keywords, trying API first then falling back to config.
+
+    Uses a module-level cache to avoid repeated API calls during a scraper run.
+
+    Args:
+        config: Optional config dict (uses get_config() if not provided)
+
+    Returns:
+        List of search keywords to use in LinkedIn searches
+    """
+    global _cached_template_keywords, _template_cache_loaded
+
+    # Return cached value if we've already loaded
+    if _template_cache_loaded and _cached_template_keywords is not None:
+        return _cached_template_keywords
+
+    # Try to fetch from API first
+    api_keywords = fetch_search_template_from_api()
+    if api_keywords:
+        _cached_template_keywords = api_keywords
+        _template_cache_loaded = True
+        return api_keywords
+
+    # Fall back to config-based keywords
+    if config is None:
+        config = get_config()
+
+    # Build keywords from config (same logic as before)
+    tier1_tools = config["positive_signals"]["tier1_tools"]["patterns"]
+    tool_terms = [t for t in tier1_tools if t in ["helioscope", "aurora solar", "pvsyst", "solaredge designer"]]
+
+    tier4_titles = config["positive_signals"]["tier4_title"]["patterns"]
+    title_terms = [t for t in tier4_titles if t in ["solar designer", "pv designer", "solar engineer", "pv engineer", "solar drafter"]]
+
+    fallback_keywords = tool_terms + title_terms + ["CAD designer", "electrical designer", "design engineer"]
+
+    _cached_template_keywords = fallback_keywords
+    _template_cache_loaded = True
+    return fallback_keywords
+
+
+def generate_linkedin_enduser_search_url(company_name: str, job_title: str = None, config: dict = None) -> str:
+    """Generate a Google search URL for end users - people who use solar design tools.
+
+    Fetches search template keywords from ops-dashboard API if available,
+    otherwise falls back to filter-config.json patterns.
+
+    Args:
+        company_name: Company name to search
+        job_title: Optional job title for context (currently unused but kept for API compatibility)
+        config: Optional config dict (uses get_config() if not provided)
+
+    Returns:
+        Google search URL for LinkedIn profiles
+    """
     clean_name = clean_company_name(company_name)
-    # Search for people who would actually use solar design software
-    query = f'site:linkedin.com/in/ "{clean_name}" (designer OR drafter OR "CAD technician" OR "design engineer" OR AutoCAD OR "solar design")'
+
+    # Get keywords from API or config
+    keywords = get_search_template_keywords(config)
+
+    # Build the OR clause with quoting for multi-word terms
+    search_terms = []
+    for term in keywords:
+        if " " in term:
+            search_terms.append(f'"{term}"')
+        else:
+            search_terms.append(term)
+
+    # Limit to 10 terms to keep URL reasonable
+    terms_clause = " OR ".join(search_terms[:10])
+
+    query = f'site:linkedin.com/in/ "{clean_name}" ({terms_clause})'
     encoded_query = urllib.parse.quote(query)
     return f"https://www.google.com/search?q={encoded_query}"
 
