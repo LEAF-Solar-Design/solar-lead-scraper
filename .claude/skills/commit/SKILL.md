@@ -1,8 +1,6 @@
 ---
 name: commit
 description: Review, stage, commit, and push all git changes with an auto-generated message
-disable-model-invocation: true
-allowed-tools: Bash(rm *), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git add *), Bash(git commit *), Bash(git push*)
 ---
 
 # Commit Workflow

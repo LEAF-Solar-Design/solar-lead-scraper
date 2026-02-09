@@ -39,7 +39,12 @@
       "WebFetch(domain:www.solarjobsusa.com)",
       "WebFetch(domain:www.orssia.org)",
       "WebFetch(domain:jobs.nabcep.org)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(rm:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git ls-files:*)"
     ]
   }
 }
