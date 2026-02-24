@@ -32,15 +32,15 @@ DESIGN_CATEGORIES = [
     "Consulting",
 ]
 
-# Search terms to use (subset of main scraper's terms relevant to NABCEP's audience)
+# Search terms to use — specific to solar design roles (avoid broad terms like
+# "renewable energy" or generic "solar" that match academic/research/regulatory postings)
 NABCEP_SEARCH_TERMS = [
     "solar designer",
     "solar engineer",
     "PV designer",
     "PV engineer",
-    "solar",
-    "photovoltaic",
-    "renewable energy",
+    "solar design",
+    "PV design",
 ]
 
 
@@ -313,12 +313,6 @@ def scrape_nabcep(
             if job.job_id not in all_jobs:
                 all_jobs[job.job_id] = job
         time.sleep(delay_between_requests)
-
-    # Also fetch all jobs (no filter) to catch anything we missed
-    jobs = search_jobs()
-    for job in jobs:
-        if job.job_id not in all_jobs:
-            all_jobs[job.job_id] = job
 
     print(f"[NABCEP] Total unique jobs found: {len(all_jobs)}")
 
