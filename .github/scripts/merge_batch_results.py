@@ -378,6 +378,73 @@ def merge_deep_analytics(analytics_files: list[Path], output_dir: Path, timestam
     return analytics_output
 
 
+def merge_nabcep_leads(output_dir: Path, timestamp: str) -> None:
+    """Run the NABCEP scraper and merge results into the main leads CSV.
+
+    Runs once during the merge step (not batched). Appends NABCEP jobs to the
+    merged batch CSV, deduplicating by company name.
+
+    Args:
+        output_dir: Directory containing the merged batch CSV
+        timestamp: Timestamp string used to find/create the output CSV
+    """
+    try:
+        import sys
+        # nabcep_scraper.py is in the repo root (two levels up from .github/scripts/)
+        repo_root = str(Path(__file__).parent.parent.parent)
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+
+        from nabcep_scraper import run_nabcep_scraper
+
+        print("\n" + "=" * 50)
+        print("NABCEP CAREER CENTER SCRAPE")
+        print("=" * 50)
+
+        nabcep_df, nabcep_errors = run_nabcep_scraper(fetch_details=True)
+
+        if nabcep_errors:
+            print(f"[NABCEP] {len(nabcep_errors)} error(s): {nabcep_errors}")
+
+        if nabcep_df.empty:
+            print("[NABCEP] No jobs found — skipping merge")
+            return
+
+        print(f"[NABCEP] Scraped {len(nabcep_df)} jobs")
+
+        # Find the merged batch CSV to append to
+        existing_csvs = sorted(output_dir.glob("solar_leads_*.csv"))
+        if existing_csvs:
+            main_csv = existing_csvs[-1]
+            main_df = pd.read_csv(main_csv)
+            before_count = len(main_df)
+
+            combined = pd.concat([main_df, nabcep_df], ignore_index=True)
+
+            # Sort by confidence_score if present so we keep highest-quality duplicate
+            if "confidence_score" in combined.columns:
+                combined = combined.sort_values(
+                    "confidence_score", ascending=False, na_position="last"
+                )
+
+            combined = combined.drop_duplicates(subset=["company"], keep="first")
+            combined.to_csv(main_csv, index=False)
+            added = len(combined) - before_count
+            print(
+                f"[NABCEP] Merged into {main_csv.name}: "
+                f"{before_count} → {len(combined)} rows (+{added} new companies)"
+            )
+        else:
+            # No batch CSV exists (all batches may have failed); create one from NABCEP alone
+            nabcep_output = output_dir / f"solar_leads_{timestamp}.csv"
+            nabcep_df.to_csv(nabcep_output, index=False)
+            print(f"[NABCEP] No batch CSV found — saved {len(nabcep_df)} jobs to {nabcep_output.name}")
+
+    except Exception as e:
+        # NABCEP is additive; don't block the rest of the pipeline on failure
+        print(f"[NABCEP] Warning: scraper failed ({e}) — continuing without NABCEP results")
+
+
 def main():
     """Main entry point for batch result merging."""
     output_dir = Path("output")
@@ -401,6 +468,9 @@ def main():
     # Merge deep analytics files
     analytics_files = list(batches_dir.glob("**/deep_analytics_*.json"))
     merge_deep_analytics(analytics_files, output_dir, timestamp)
+
+    # Append NABCEP career center leads (runs once, not batched)
+    merge_nabcep_leads(output_dir, timestamp)
 
 
 if __name__ == "__main__":
