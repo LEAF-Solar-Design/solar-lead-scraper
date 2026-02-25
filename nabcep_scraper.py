@@ -25,12 +25,10 @@ from bs4 import BeautifulSoup
 NABCEP_BASE_URL = "https://jobs.nabcep.org"
 NABCEP_JOBS_URL = f"{NABCEP_BASE_URL}/jobs/"
 
-# Categories relevant to solar design (from NABCEP's filter options)
-DESIGN_CATEGORIES = [
-    "Design/Engineering",
-    "Engineering",
-    "Consulting",
-]
+# Categories NOT used — category search returns all NABCEP-adjacent roles
+# including academic (MIT, LBL), research, regulatory, which are junk leads.
+# Keyword-only search is more precise for solar design/drafting roles.
+# DESIGN_CATEGORIES = ["Design/Engineering", "Engineering", "Consulting"]
 
 # Search terms to use — specific to solar design roles (avoid broad terms like
 # "renewable energy" or generic "solar" that match academic/research/regulatory postings)
@@ -275,7 +273,6 @@ def search_jobs(keyword: str = "", category: str = "") -> list[NABCEPJob]:
 
 def scrape_nabcep(
     search_terms: list[str] = None,
-    categories: list[str] = None,
     fetch_details: bool = False,
     delay_between_requests: float = 1.0,
 ) -> pd.DataFrame:
@@ -293,22 +290,12 @@ def scrape_nabcep(
     """
     if search_terms is None:
         search_terms = NABCEP_SEARCH_TERMS
-    if categories is None:
-        categories = DESIGN_CATEGORIES
 
     all_jobs = {}  # Use dict to deduplicate by job_id
 
-    # Search by keywords
+    # Search by keywords only — category search disabled (returns academic/research junk)
     for term in search_terms:
         jobs = search_jobs(keyword=term)
-        for job in jobs:
-            if job.job_id not in all_jobs:
-                all_jobs[job.job_id] = job
-        time.sleep(delay_between_requests)
-
-    # Search by categories
-    for category in categories:
-        jobs = search_jobs(category=category)
         for job in jobs:
             if job.job_id not in all_jobs:
                 all_jobs[job.job_id] = job
