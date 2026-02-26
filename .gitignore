@@ -2,6 +2,9 @@
 output/*
 !output/.gitkeep
 
+# Cold lead discovery state — contains business-sensitive data (submitted companies, queries)
+data/cold_lead_state.json
+
 # Python
 __pycache__/
 *.py[cod]
