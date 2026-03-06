@@ -1327,6 +1327,7 @@ def scrape_solar_jobs(batch: int | None = None, total_batches: int = 4, run_id: 
         "engineering technician PV",
         "design assistant",
         "drafting assistant",
+        "solar design assistant",
 
         # Coordinator/specialist roles
         "design coordinator",

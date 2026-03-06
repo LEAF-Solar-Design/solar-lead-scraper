@@ -137,8 +137,7 @@
         "foreman",
         "crew lead",
         "installation crew",
-        "install team",
-        "technician"
+        "install team"
       ],
       "description": "Field installation roles",
       "check_area": "title"
@@ -315,6 +314,7 @@
       "patterns": [
         "solar designer",
         "pv designer",
+        "pv system designer",
         "solar drafter",
         "pv drafter",
         "solar design engineer",
@@ -322,6 +322,7 @@
         "solar cad",
         "photovoltaic designer",
         "solar design technician",
+        "solar design assistant",
         "solar engineer",
         "pv engineer",
         "photovoltaic engineer",
