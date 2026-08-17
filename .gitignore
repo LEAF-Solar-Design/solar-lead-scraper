@@ -12,3 +12,6 @@ __pycache__/
 .env
 venv/
 .venv/
+
+# Claude Code machine-local settings — should never be tracked
+.claude/settings.local.json
