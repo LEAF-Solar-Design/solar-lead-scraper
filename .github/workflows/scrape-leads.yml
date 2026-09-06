@@ -10,7 +10,7 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: codebuild-leaf-gha-runner-solar-lead-scraper-${{ github.run_id }}-${{ github.run_attempt }}
     timeout-minutes: 180  # Kill hung jobs - quadrupled from 45 min
     strategy:
       matrix:
@@ -113,7 +113,7 @@ jobs:
   merge:
     needs: scrape
     if: always()  # Run merge even if some batches failed
-    runs-on: ubuntu-latest
+    runs-on: codebuild-leaf-gha-runner-solar-lead-scraper-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout code
